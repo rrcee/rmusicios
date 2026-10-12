@@ -1,3 +1,5 @@
+@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+
 package com.maxrave.simpmusic.viewModel
 
 import com.eygraber.uri.Uri
@@ -135,25 +137,6 @@ actual fun changeLanguageNative(code: String) {
     NSUserDefaults.standardUserDefaults.synchronize()
 }
 
-actual fun setAppIconNative(iconKey: String?) {
-    runCatching {
-        val app = UIApplication.sharedApplication ?: return
-        val iconName = if (iconKey == "default" || iconKey.isNullOrEmpty()) null else iconKey
-        val sel = platform.darwin.NSSelectorFromString("setAlternateIconName:completionHandler:")
-        if (app.respondsToSelector(sel)) {
-            app.performSelector(sel, withObject = iconName)
-        }
-    }
-}
+actual fun setAppIconNative(iconKey: String?) {}
 
-actual fun getAppIconNative(): String {
-    return runCatching {
-        val app = UIApplication.sharedApplication ?: return "default"
-        val sel = platform.darwin.NSSelectorFromString("alternateIconName")
-        if (app.respondsToSelector(sel)) {
-            (app.performSelector(sel) as? String) ?: "default"
-        } else {
-            "default"
-        }
-    }.getOrDefault("default")
-}
+actual fun getAppIconNative(): String = "default"
