@@ -19,11 +19,13 @@ import platform.Foundation.NSHomeDirectory
 import platform.Foundation.NSNumber
 import platform.Foundation.NSSearchPathForDirectoriesInDomains
 import platform.Foundation.NSURL
+import platform.Foundation.NSUserDomainMask
 import platform.Foundation.NSUserDefaults
 import platform.Foundation.dataWithContentsOfFile
 import platform.Foundation.dataWithContentsOfURL
 import platform.Foundation.getBytes
 import platform.Foundation.writeToFile
+import platform.UIKit.UIApplication
 
 @OptIn(ExperimentalForeignApi::class)
 actual suspend fun calculateDataFraction(cacheRepository: CacheRepository): SettingsStorageSectionFraction? {
@@ -134,11 +136,12 @@ actual fun changeLanguageNative(code: String) {
 }
 
 actual fun setAppIconNative(iconKey: String?) {
-    if (platform.UIKit.UIApplication.sharedApplication.supportsAlternateIcons) {
+    val app = UIApplication.sharedApplication
+    if (app?.supportsAlternateIcons == true) {
         val iconName = if (iconKey == "default" || iconKey.isNullOrEmpty()) null else iconKey
-        platform.UIKit.UIApplication.sharedApplication.setAlternateIconName(iconName, completionHandler = null)
+        app.setAlternateIconName(iconName, completionHandler = null)
     }
 }
 
 actual fun getAppIconNative(): String =
-    platform.UIKit.UIApplication.sharedApplication.alternateIconName ?: "default"
+    UIApplication.sharedApplication?.alternateIconName ?: "default"

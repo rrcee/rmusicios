@@ -1142,7 +1142,7 @@ class SharedViewModel(
             val updateChannel = dataStoreManager.updateChannel.first()
             dataStoreManager.putString(
                 "CheckForUpdateAt",
-                System.currentTimeMillis().toString(),
+                kotlinx.datetime.Clock.System.now().toEpochMilliseconds().toString(),
             )
             if (updateChannel == DataStoreManager.GITHUB) {
                 updateRepository.checkForGithubReleaseUpdate().collectLatest { response ->
@@ -2026,13 +2026,15 @@ class SharedViewModel(
         viewModelScope.launch {
             nowPlayingState.value?.track?.let { track ->
                 val bytesArray = bitmap.toByteArray()
-                try {
-                    FileSystem.SYSTEM.write("$path.jpg".toPath()) {
-                        write(bytesArray)
+                if (bytesArray != null) {
+                    try {
+                        FileSystem.SYSTEM.write("$path.jpg".toPath()) {
+                            write(bytesArray)
+                        }
+                        Logger.d(tag, "Thumbnail saved to $path.jpg")
+                    } catch (e: Exception) {
+                        Logger.e(tag, "Failed to save thumbnail: ${e.message}")
                     }
-                    Logger.d(tag, "Thumbnail saved to $path.jpg")
-                } catch (e: Exception) {
-                    Logger.e(tag, "Failed to save thumbnail: ${e.message}")
                 }
                 songRepository
                     .downloadToFile(

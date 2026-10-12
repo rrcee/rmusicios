@@ -1,3 +1,5 @@
+@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+
 package com.maxrave.simpmusic.expect.ui
 
 import androidx.compose.foundation.background

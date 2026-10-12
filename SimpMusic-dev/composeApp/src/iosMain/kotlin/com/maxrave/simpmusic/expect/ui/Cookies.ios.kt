@@ -1,4 +1,8 @@
+@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+
 package com.maxrave.simpmusic.expect.ui
+
+import kotlinx.cinterop.readValue
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -79,7 +83,7 @@ actual fun PlatformWebView(
             factory = {
                 val config = WKWebViewConfiguration()
                 config.websiteDataStore = WKWebsiteDataStore.defaultDataStore()
-                val webView = WKWebView(frame = platform.CoreGraphics.CGRectZero, configuration = config)
+                val webView = WKWebView(frame = platform.CoreGraphics.CGRectZero.readValue(), configuration = config)
                 // Set standard mobile Safari user agent so Google login is not blocked
                 webView.customUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
                 val delegate = NavigationDelegate(

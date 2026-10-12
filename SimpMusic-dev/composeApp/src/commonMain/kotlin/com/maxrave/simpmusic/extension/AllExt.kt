@@ -37,6 +37,7 @@ import simpmusic.composeapp.generated.resources.preview
 import simpmusic.composeapp.generated.resources.recently
 import simpmusic.composeapp.generated.resources.self_promotion
 import simpmusic.composeapp.generated.resources.sponsor
+import simpmusic.composeapp.generated.resources.title
 import kotlin.time.ExperimentalTime
 
 fun String?.removeDuplicateWords(): String {
@@ -135,6 +136,8 @@ fun formatNumberWithCommas(number: Long?): String {
     return if (isNegative) "-$result" else result.toString()
 }
 
+fun formatNumberWithCommas(number: Int?): String = formatNumberWithCommas(number?.toLong())
+
 fun parseTimestampToMilliseconds(timestamp: String): Double {
     val parts = timestamp.split(":")
     val totalSeconds =
@@ -172,26 +175,9 @@ fun parseTimestampToMilliseconds(timestamp: String): Double {
     return totalSeconds * 1000
 }
 
-fun InputStream.zipInputStream(): ZipInputStream = ZipInputStream(this)
-
-fun OutputStream.zipOutputStream(): ZipOutputStream = ZipOutputStream(this)
-
 fun Long?.bytesToMB(): Long {
     val mbInBytes = 1024 * 1024
     return this?.div(mbInBytes) ?: 0L
-}
-
-fun getSizeOfFile(dir: File): Long {
-    var dirSize: Long = 0
-    if (!dir.listFiles().isNullOrEmpty()) {
-        for (f in dir.listFiles()!!) {
-            dirSize += f.length()
-            if (f.isDirectory) {
-                dirSize += getSizeOfFile(f)
-            }
-        }
-    }
-    return dirSize
 }
 
 fun ArtistBrowse.toArtistScreenData(): ArtistScreenData =

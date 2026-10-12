@@ -129,7 +129,7 @@ class SettingsViewModel(
     private var _canvasCacheSize: MutableStateFlow<Long?> = MutableStateFlow(null)
     val canvasCacheSize: StateFlow<Long?> = _canvasCacheSize
     private var _appIcon = MutableStateFlow<String>(getAppIconNative())
-    val appIcon: StateFlow<String> = _appIcon.asStateFlow()
+    val appIcon: StateFlow<String> = _appIcon
 
     fun setAppIcon(iconKey: String) {
         viewModelScope.launch {
