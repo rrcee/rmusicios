@@ -591,7 +591,7 @@ class IosMediaPlayerHandlerImpl(
 
     override fun hasPreviousMediaItem(): Boolean = _currentSongIndex.value > 0
 
-    override fun setPlaybackParameters(playbackParameters: GenericPlaybackParameters) {
+    fun setPlaybackParameters(playbackParameters: GenericPlaybackParameters) {
         this.playbackParameters = playbackParameters
         avPlayer?.rate = playbackParameters.speed
     }
@@ -611,13 +611,13 @@ class IosMediaPlayerHandlerImpl(
         avPlayer = null
     }
 
-    override fun setVolume(volume: Float) {
+    fun setVolume(volume: Float) {
         val safeVol = volume.coerceIn(0f, 1f)
         avPlayer?.volume = safeVol
         _controlState.update { it.copy(volume = safeVol) }
     }
 
-    override fun getVolume(): Float = avPlayer?.volume ?: 1f
+    fun getVolume(): Float = avPlayer?.volume ?: 1f
 
     override fun setEqualizer(bandsDb: List<Float>, preampDb: Float) {}
     override fun setAudioEffects(effects: AudioEffects) {}
