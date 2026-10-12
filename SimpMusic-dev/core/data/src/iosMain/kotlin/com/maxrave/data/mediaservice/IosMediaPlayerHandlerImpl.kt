@@ -815,19 +815,19 @@ class IosMediaPlayerHandlerImpl(
         val current = currentMediaItem ?: return
         coroutineScope.launch {
             val song = songRepository.getSong(current.mediaId).firstOrNull()
-            if (song != null) {
-                val newLike = song.liked == 0
-                songRepository.updateLike(newLike, current.mediaId)
-                _nowPlayingState.update { it.copy(songEntity = it.songEntity?.copy(liked = if (newLike) 1 else 0)) }
-            }
+            val newLike = if (song != null) !song.liked else !_controlState.value.isLiked
+            songRepository.updateLikeStatus(current.mediaId, if (newLike) 1 else 0)
+            _controlState.update { it.copy(isLiked = newLike) }
+            _nowPlayingState.update { it.copy(songEntity = it.songEntity?.copy(liked = newLike)) }
         }
     }
 
     override fun like(liked: Boolean) {
         val current = currentMediaItem ?: return
         coroutineScope.launch {
-            songRepository.updateLike(liked, current.mediaId)
-            _nowPlayingState.update { it.copy(songEntity = it.songEntity?.copy(liked = if (liked) 1 else 0)) }
+            songRepository.updateLikeStatus(current.mediaId, if (liked) 1 else 0)
+            _controlState.update { it.copy(isLiked = liked) }
+            _nowPlayingState.update { it.copy(songEntity = it.songEntity?.copy(liked = liked)) }
         }
     }
 
@@ -1028,7 +1028,7 @@ class IosMediaPlayerHandlerImpl(
     override fun mayBeSaveRecentSong(runBlocking: Boolean) {
         val song = _nowPlayingState.value.songEntity ?: return
         playerScope.launch {
-            songRepository.insertSong(song)
+            songRepository.insertSong(song).firstOrNull()
         }
     }
 

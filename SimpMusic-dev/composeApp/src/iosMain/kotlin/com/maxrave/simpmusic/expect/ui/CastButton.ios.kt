@@ -17,19 +17,17 @@ actual fun PlatformCastButton(
     UIKitView(
         factory = {
             AVRoutePickerView().apply {
-                this.tintColor = UIColor(
+                tintColor = UIColor.colorWithRed(
                     red = tint.red.toDouble(),
                     green = tint.green.toDouble(),
                     blue = tint.blue.toDouble(),
                     alpha = tint.alpha.toDouble(),
                 )
-                this.activeTintColor = UIColor.systemRedColor
-                this.prioritizesVideoDevices = false
             }
         },
         modifier = modifier,
         update = { view ->
-            view.tintColor = UIColor(
+            view.tintColor = UIColor.colorWithRed(
                 red = tint.red.toDouble(),
                 green = tint.green.toDouble(),
                 blue = tint.blue.toDouble(),

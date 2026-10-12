@@ -22,8 +22,8 @@ import platform.Foundation.NSURL
 import platform.Foundation.NSUserDefaults
 import platform.Foundation.dataWithContentsOfFile
 import platform.Foundation.dataWithContentsOfURL
+import platform.Foundation.getBytes
 import platform.Foundation.writeToFile
-import platform.posix.memcpy
 
 @OptIn(ExperimentalForeignApi::class)
 actual suspend fun calculateDataFraction(cacheRepository: CacheRepository): SettingsStorageSectionFraction? {
@@ -74,7 +74,7 @@ actual suspend fun readPickedFile(uri: Uri): ByteArray = withContext(Dispatchers
         if (length == 0) return@runCatching ByteArray(0)
         val array = ByteArray(length)
         array.usePinned { pinned ->
-            memcpy(pinned.addressOf(0), data.bytes, data.length)
+            data.getBytes(pinned.addressOf(0), length.toULong())
         }
         array
     }.getOrDefault(ByteArray(0))
