@@ -8,7 +8,7 @@ sealed class Platform {
     fun osName(): String = when (this) {
         Android -> "android"
         iOS -> "iOS"
-        Desktop -> System.getProperty("os.name") ?: "jvm"
+        Desktop -> "desktop"
     }
 }
 

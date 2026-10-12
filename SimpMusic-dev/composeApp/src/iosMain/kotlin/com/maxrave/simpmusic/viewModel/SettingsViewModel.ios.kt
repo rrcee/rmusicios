@@ -136,12 +136,24 @@ actual fun changeLanguageNative(code: String) {
 }
 
 actual fun setAppIconNative(iconKey: String?) {
-    val app = UIApplication.sharedApplication
-    if (app?.supportsAlternateIcons == true) {
+    runCatching {
+        val app = UIApplication.sharedApplication ?: return
         val iconName = if (iconKey == "default" || iconKey.isNullOrEmpty()) null else iconKey
-        app.setAlternateIconName(iconName, completionHandler = null)
+        val sel = platform.darwin.NSSelectorFromString("setAlternateIconName:completionHandler:")
+        if (app.respondsToSelector(sel)) {
+            app.performSelector(sel, withObject = iconName)
+        }
     }
 }
 
-actual fun getAppIconNative(): String =
-    UIApplication.sharedApplication?.alternateIconName ?: "default"
+actual fun getAppIconNative(): String {
+    return runCatching {
+        val app = UIApplication.sharedApplication ?: return "default"
+        val sel = platform.darwin.NSSelectorFromString("alternateIconName")
+        if (app.respondsToSelector(sel)) {
+            (app.performSelector(sel) as? String) ?: "default"
+        } else {
+            "default"
+        }
+    }.getOrDefault("default")
+}
