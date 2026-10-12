@@ -64,6 +64,7 @@ kotlin {
         iosTarget.binaries.framework {
             baseName = "ComposeApp"
             isStatic = true
+            binaryOption("bundleId", "com.maxrave.simpmusic.ComposeApp")
             linkerOpts.addAll(listOf("-framework", "AVKit", "-framework", "AVFoundation", "-framework", "MediaPlayer", "-framework", "WebKit", "-framework", "UIKit", "-lsqlite3"))
         }
     }
