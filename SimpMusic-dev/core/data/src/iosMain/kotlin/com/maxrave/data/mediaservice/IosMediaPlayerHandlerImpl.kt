@@ -35,6 +35,7 @@ import com.maxrave.domain.utils.Resource
 import com.maxrave.domain.utils.toSongEntity
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.logger.Logger
+import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -47,11 +48,28 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import platform.AVFAudio.AVAudioSession
 import platform.AVFAudio.AVAudioSessionCategoryPlayback
+import platform.AVFAudio.AVAudioSessionInterruptionNotification
+import platform.AVFAudio.AVAudioSessionInterruptionOptionKey
+import platform.AVFAudio.AVAudioSessionInterruptionOptionShouldResume
+import platform.AVFAudio.AVAudioSessionInterruptionTypeBegan
+import platform.AVFAudio.AVAudioSessionInterruptionTypeEnded
+import platform.AVFAudio.AVAudioSessionInterruptionTypeKey
+import platform.AVFAudio.AVAudioSessionPortAirPlay
+import platform.AVFAudio.AVAudioSessionPortBluetoothA2DP
+import platform.AVFAudio.AVAudioSessionPortBluetoothHFP
+import platform.AVFAudio.AVAudioSessionPortBluetoothLE
+import platform.AVFAudio.AVAudioSessionPortDescription
+import platform.AVFAudio.AVAudioSessionPortHeadphones
+import platform.AVFAudio.AVAudioSessionRouteChangeNotification
+import platform.AVFAudio.AVAudioSessionRouteChangeReasonKey
+import platform.AVFAudio.AVAudioSessionRouteChangeReasonOldDeviceUnavailable
 import platform.AVFAudio.setActive
 import platform.AVFoundation.AVPlayer
 import platform.AVFoundation.AVPlayerItem
+import platform.AVFoundation.AVPlayerItemDidPlayToEndTimeNotification
 import platform.AVFoundation.AVPlayerItemStatusReadyToPlay
 import platform.AVFoundation.AVPlayerTimeControlStatusPaused
 import platform.AVFoundation.AVPlayerTimeControlStatusPlaying
@@ -62,11 +80,13 @@ import platform.AVFoundation.play
 import platform.AVFoundation.seekToTime
 import platform.CoreMedia.CMTimeGetSeconds
 import platform.CoreMedia.CMTimeMakeWithSeconds
-import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.coroutines.withContext
 import platform.Foundation.NSData
-import platform.Foundation.dataWithContentsOfURL
+import platform.Foundation.NSNotificationCenter
+import platform.Foundation.NSNumber
+import platform.Foundation.NSOperationQueue
 import platform.Foundation.NSURL
+import platform.Foundation.dataWithContentsOfURL
+import platform.MediaPlayer.MPChangePlaybackPositionCommandEvent
 import platform.MediaPlayer.MPMediaItemArtwork
 import platform.MediaPlayer.MPMediaItemPropertyAlbumTitle
 import platform.MediaPlayer.MPMediaItemPropertyArtist
@@ -85,7 +105,8 @@ private const val TAG = "IosMediaPlayerHandler"
 /**
  * iOS implementation of [MediaPlayerHandler] and [MediaPlayerInterface].
  * Manages AVPlayer playback, queue management, background audio session,
- * MPNowPlayingInfoCenter and MPRemoteCommandCenter on iOS.
+ * interruptions, headphone route changes, MPNowPlayingInfoCenter,
+ * MPRemoteCommandCenter, and full-fidelity lock screen artwork.
  */
 class IosMediaPlayerHandlerImpl(
     private val dataStoreManager: DataStoreManager,
@@ -101,6 +122,7 @@ class IosMediaPlayerHandlerImpl(
     private var currentUrl: String? = null
     private var progressJob: Job? = null
     private var sleepJob: Job? = null
+    private var wasPlayingBeforeInterruption = false
 
     // State flows
     private val _simpleMediaState = MutableStateFlow(SimpleMediaState())
@@ -109,13 +131,29 @@ class IosMediaPlayerHandlerImpl(
     private val _nowPlaying = MutableStateFlow<GenericMediaItem?>(null)
     override val nowPlaying: StateFlow<GenericMediaItem?> = _nowPlaying.asStateFlow()
 
-    private val _queueData = MutableStateFlow<QueueData?>(null)
+    private val _queueData = MutableStateFlow<QueueData?>(
+        QueueData(
+            queueState = QueueData.StateSource.STATE_CREATED,
+            data = QueueData.Data(),
+        ),
+    )
     override val queueData: StateFlow<QueueData?> = _queueData.asStateFlow()
 
-    private val _controlState = MutableStateFlow(ControlState())
+    private val _controlState = MutableStateFlow(
+        ControlState(
+            isPlaying = false,
+            isShuffle = false,
+            repeatState = RepeatState.None,
+            isLiked = false,
+            isNextAvailable = false,
+            isPreviousAvailable = false,
+            isCrossfading = false,
+            volume = 1.0f,
+        ),
+    )
     override val controlState: StateFlow<ControlState> = _controlState.asStateFlow()
 
-    private val _nowPlayingState = MutableStateFlow(NowPlayingTrackState())
+    private val _nowPlayingState = MutableStateFlow(NowPlayingTrackState.initial())
     override val nowPlayingState: StateFlow<NowPlayingTrackState> = _nowPlayingState.asStateFlow()
 
     private val _sleepTimerState = MutableStateFlow(SleepTimerState(false, 0))
@@ -133,6 +171,11 @@ class IosMediaPlayerHandlerImpl(
     private val _castState = MutableStateFlow(GenericCastState())
     override val castState: StateFlow<GenericCastState> = _castState.asStateFlow()
 
+    private val _audioOutputs = MutableStateFlow<List<AudioOutput>>(
+        listOf(AudioOutput("Default", AudioOutputKind.SPEAKER, true)),
+    )
+    override val audioOutputs: StateFlow<List<AudioOutput>> = _audioOutputs.asStateFlow()
+
     override val player: MediaPlayerInterface get() = this
 
     override var onUpdateNotification: (List<GenericCommandButton>) -> Unit = {}
@@ -144,10 +187,53 @@ class IosMediaPlayerHandlerImpl(
     private var originalQueue = mutableListOf<GenericMediaItem>()
     private val listeners = mutableListOf<MediaPlayerListener>()
 
+    // MediaPlayerInterface properties
+    override var shuffleModeEnabled: Boolean
+        get() = _controlState.value.isShuffle
+        set(value) {
+            _controlState.update { it.copy(isShuffle = value) }
+        }
+
+    override var repeatMode: Int
+        get() = when (_controlState.value.repeatState) {
+            RepeatState.None -> 0
+            RepeatState.One -> 1
+            RepeatState.All -> 2
+        }
+        set(value) {
+            val state = when (value) {
+                1 -> RepeatState.One
+                2 -> RepeatState.All
+                else -> RepeatState.None
+            }
+            _controlState.update { it.copy(repeatState = state) }
+        }
+
+    override var playWhenReady: Boolean = true
+    override var playbackParameters: GenericPlaybackParameters = GenericPlaybackParameters(1.0f, 1.0f)
+    override val audioSessionId: Int = 0
+    override var volume: Float
+        get() = avPlayer?.volume ?: 1f
+        set(value) {
+            setVolume(value)
+        }
+    override var sleepFadeFactor: Float = 1.0f
+    override var crossfadeSuppressed: Boolean = false
+    override var albumTrackIds: Set<String> = emptySet()
+    override var skipSilenceEnabled: Boolean = false
+
+    override val bufferedPosition: Long get() = _simpleMediaState.value.progress
+    override val bufferedPercentage: Int get() = 100
+    override val contentPosition: Long get() = _simpleMediaState.value.progress
+    override val playbackState: Int
+        get() = if (isPlaying) 3 else 2 // 3 = READY, 2 = BUFFERING/PAUSED
+
     init {
         setupAudioSession()
+        setupNotificationsAndInterruptions()
         setupRemoteCommands()
         startProgressMonitoring()
+        refreshAudioOutputs()
     }
 
     private fun setupAudioSession() {
@@ -157,6 +243,58 @@ class IosMediaPlayerHandlerImpl(
             audioSession.setActive(true, error = null)
         }.onFailure {
             Logger.e(TAG, "Failed to configure audio session: ${it.message}")
+        }
+    }
+
+    private fun setupNotificationsAndInterruptions() {
+        runCatching {
+            val center = NSNotificationCenter.defaultCenter
+
+            // 1. Audio session interruptions (phone calls, FaceTime, alarms)
+            center.addObserverForName(
+                name = AVAudioSessionInterruptionNotification,
+                `object` = null,
+                queue = NSOperationQueue.mainQueue,
+            ) { notification ->
+                val userInfo = notification?.userInfo ?: return@addObserverForName
+                val type = (userInfo[AVAudioSessionInterruptionTypeKey] as? NSNumber)?.unsignedIntegerValue
+                if (type == AVAudioSessionInterruptionTypeBegan.toULong()) {
+                    wasPlayingBeforeInterruption = isPlaying
+                    pause()
+                } else if (type == AVAudioSessionInterruptionTypeEnded.toULong()) {
+                    val options = (userInfo[AVAudioSessionInterruptionOptionKey] as? NSNumber)?.unsignedIntegerValue
+                    if (options != null && (options and AVAudioSessionInterruptionOptionShouldResume.toULong()) != 0UL) {
+                        if (wasPlayingBeforeInterruption) {
+                            play()
+                        }
+                    }
+                }
+            }
+
+            // 2. Audio route changes (headphones unplugged / AirPods disconnected -> auto-pause)
+            center.addObserverForName(
+                name = AVAudioSessionRouteChangeNotification,
+                `object` = null,
+                queue = NSOperationQueue.mainQueue,
+            ) { notification ->
+                refreshAudioOutputs()
+                val userInfo = notification?.userInfo ?: return@addObserverForName
+                val reason = (userInfo[AVAudioSessionRouteChangeReasonKey] as? NSNumber)?.unsignedIntegerValue
+                if (reason == AVAudioSessionRouteChangeReasonOldDeviceUnavailable.toULong()) {
+                    pause()
+                }
+            }
+
+            // 3. Track finished playing notification
+            center.addObserverForName(
+                name = AVPlayerItemDidPlayToEndTimeNotification,
+                `object` = null,
+                queue = NSOperationQueue.mainQueue,
+            ) { _ ->
+                onTrackEnded()
+            }
+        }.onFailure {
+            Logger.e(TAG, "Failed to register audio observers: ${it.message}")
         }
     }
 
@@ -183,7 +321,7 @@ class IosMediaPlayerHandlerImpl(
             MPRemoteCommandHandlerStatusSuccess
         }
         commandCenter.changePlaybackPositionCommand.addTargetWithHandler { event ->
-            val positionEvent = event as? platform.MediaPlayer.MPChangePlaybackPositionCommandEvent
+            val positionEvent = event as? MPChangePlaybackPositionCommandEvent
             val targetTime = positionEvent?.positionTime ?: 0.0
             seekTo((targetTime * 1000).toLong())
             MPRemoteCommandHandlerStatusSuccess
@@ -263,8 +401,7 @@ class IosMediaPlayerHandlerImpl(
                         )
                     }
 
-                    // Check if song finished (within 500ms of end)
-                    if (durMs > 1000 && posMs >= durMs - 500 && isPlaying) {
+                    if (durMs > 1000 && posMs >= durMs - 300 && isPlaying) {
                         onTrackEnded()
                     }
                 }
@@ -298,6 +435,9 @@ class IosMediaPlayerHandlerImpl(
     // --- MediaPlayerInterface Implementation ---
 
     override fun play() {
+        runCatching {
+            AVAudioSession.sharedInstance().setActive(true, error = null)
+        }
         avPlayer?.play()
         _controlState.update { it.copy(isPlaying = true) }
         _nowPlaying.value?.let { item ->
@@ -382,9 +522,7 @@ class IosMediaPlayerHandlerImpl(
         }
     }
 
-    override fun prepare() {
-        // Ready
-    }
+    override fun prepare() {}
 
     override fun setMediaItem(mediaItem: GenericMediaItem) {
         mediaQueue.clear()
@@ -418,12 +556,25 @@ class IosMediaPlayerHandlerImpl(
         }
     }
 
+    override fun removeMediaItems(fromIndex: Int, toIndex: Int, onRemoved: (removedIds: List<String>) -> Unit) {
+        val safeFrom = fromIndex.coerceIn(0, mediaQueue.size)
+        val safeTo = toIndex.coerceIn(safeFrom, mediaQueue.size)
+        val removed = mediaQueue.subList(safeFrom, safeTo).map { it.mediaId }
+        mediaQueue.subList(safeFrom, safeTo).clear()
+        syncQueueData()
+        onRemoved(removed)
+    }
+
     override fun moveMediaItem(fromIndex: Int, toIndex: Int) {
         if (fromIndex in mediaQueue.indices && toIndex in mediaQueue.indices) {
             val item = mediaQueue.removeAt(fromIndex)
             mediaQueue.add(toIndex, item)
             syncQueueData()
         }
+    }
+
+    override fun moveShuffledItem(fromShuffledIndex: Int, toShuffledIndex: Int) {
+        moveMediaItem(fromShuffledIndex, toShuffledIndex)
     }
 
     override fun clearMediaItems() {
@@ -433,8 +584,15 @@ class IosMediaPlayerHandlerImpl(
         avPlayer = null
         currentUrl = null
         _nowPlaying.value = null
-        _nowPlayingState.value = NowPlayingTrackState()
+        _nowPlayingState.value = NowPlayingTrackState.initial()
         syncQueueData()
+    }
+
+    override fun replaceMediaItem(index: Int, mediaItem: GenericMediaItem) {
+        if (index in mediaQueue.indices) {
+            mediaQueue[index] = mediaItem
+            syncQueueData()
+        }
     }
 
     override val isPlaying: Boolean
@@ -457,10 +615,16 @@ class IosMediaPlayerHandlerImpl(
 
     override fun getMediaItemAt(index: Int): GenericMediaItem? = mediaQueue.getOrNull(index)
 
-    override val playbackParameters: GenericPlaybackParameters
-        get() = GenericPlaybackParameters(speed = 1.0f, pitch = 1.0f)
+    override fun getCurrentMediaTimeLine(): List<GenericMediaItem> = ArrayList(mediaQueue)
+
+    override fun getUnshuffledIndex(shuffledIndex: Int): Int = shuffledIndex
+
+    override fun hasNextMediaItem(): Boolean = _currentSongIndex.value < mediaQueue.size - 1
+
+    override fun hasPreviousMediaItem(): Boolean = _currentSongIndex.value > 0
 
     override fun setPlaybackParameters(playbackParameters: GenericPlaybackParameters) {
+        this.playbackParameters = playbackParameters
         avPlayer?.rate = playbackParameters.speed
     }
 
@@ -480,15 +644,45 @@ class IosMediaPlayerHandlerImpl(
     }
 
     override fun setVolume(volume: Float) {
-        avPlayer?.volume = volume.coerceIn(0f, 1f)
+        val safeVol = volume.coerceIn(0f, 1f)
+        avPlayer?.volume = safeVol
+        _controlState.update { it.copy(volume = safeVol) }
     }
 
     override fun getVolume(): Float = avPlayer?.volume ?: 1f
 
+    override fun setEqualizer(bandsDb: List<Float>, preampDb: Float) {}
     override fun setAudioEffects(effects: AudioEffects) {}
-    override fun getAudioEffects(): AudioEffects = AudioEffects()
-    override fun getAudioOutputs(): List<AudioOutput> = listOf(AudioOutput("Default", AudioOutputKind.SPEAKER, true))
-    override fun setAudioOutput(output: AudioOutput) {}
+
+    override fun selectAudioOutput(id: String?) {
+        refreshAudioOutputs()
+    }
+
+    override fun refreshAudioOutputs() {
+        runCatching {
+            val session = AVAudioSession.sharedInstance()
+            val currentOutputs = session.currentRoute.outputs
+            val list = mutableListOf<AudioOutput>()
+            for (i in 0 until currentOutputs.count().toInt()) {
+                val portDesc = currentOutputs.objectAtIndex(i.toULong()) as? AVAudioSessionPortDescription
+                if (portDesc != null) {
+                    val kind = when (portDesc.portType) {
+                        AVAudioSessionPortHeadphones,
+                        AVAudioSessionPortBluetoothHFP,
+                        AVAudioSessionPortBluetoothA2DP,
+                        AVAudioSessionPortBluetoothLE -> AudioOutputKind.HEADPHONES
+                        AVAudioSessionPortAirPlay -> AudioOutputKind.CAST
+                        else -> AudioOutputKind.SPEAKER
+                    }
+                    list.add(AudioOutput(id = portDesc.UID, kind = kind, isActive = true))
+                }
+            }
+            if (list.isEmpty()) {
+                list.add(AudioOutput("Default", AudioOutputKind.SPEAKER, true))
+            }
+            _audioOutputs.value = list
+        }
+    }
 
     // --- Media Loading Logic ---
 
@@ -498,9 +692,9 @@ class IosMediaPlayerHandlerImpl(
         loadArtwork(item.metadata.artworkUri)
         _nowPlayingState.update {
             it.copy(
-                title = item.title,
-                artist = item.artist,
-                song = item.toTrack().toSongEntity(),
+                mediaItem = item,
+                track = item.toTrack(),
+                songEntity = item.toTrack().toSongEntity(),
             )
         }
 
@@ -527,12 +721,14 @@ class IosMediaPlayerHandlerImpl(
             currentUrl = playableUrl
             val nsUrl = NSURL.URLWithString(playableUrl) ?: return
             val playerItem = AVPlayerItem(uRL = nsUrl)
-            
+
             if (avPlayer == null) {
                 avPlayer = AVPlayer(playerItem = playerItem)
             } else {
                 avPlayer?.replaceCurrentItemWithPlayerItem(playerItem)
             }
+
+            mayBeNormalizeVolume()
 
             if (startPositionMs > 0) {
                 val cmTime = CMTimeMakeWithSeconds(startPositionMs / 1000.0, 600)
@@ -550,13 +746,23 @@ class IosMediaPlayerHandlerImpl(
 
     private fun syncQueueData() {
         val currentQueue = mediaQueue.map { it.toTrack() }
-        _queueData.value = QueueData(
-            listTrack = ArrayList(currentQueue),
-            currentIndex = _currentSongIndex.value,
-            playlistType = PlaylistType.PLAYLIST,
-            playlistId = "",
-            playlistName = "Now Playing"
-        )
+        _queueData.update {
+            it?.copy(
+                queueState = QueueData.StateSource.STATE_INITIALIZED,
+                data = it.data.copy(
+                    listTracks = currentQueue,
+                    playlistType = PlaylistType.PLAYLIST,
+                    playlistName = "Now Playing",
+                ),
+            ) ?: QueueData(
+                queueState = QueueData.StateSource.STATE_INITIALIZED,
+                data = QueueData.Data(
+                    listTracks = currentQueue,
+                    playlistType = PlaylistType.PLAYLIST,
+                    playlistName = "Now Playing",
+                ),
+            )
+        }
     }
 
     // --- MediaPlayerHandler Implementation ---
@@ -566,6 +772,7 @@ class IosMediaPlayerHandlerImpl(
             PlayerEvent.PlayPause -> if (isPlaying) pause() else play()
             PlayerEvent.Next -> seekToNext()
             PlayerEvent.Previous -> seekToPrevious()
+            PlayerEvent.SkipToPrevious -> seekToPreviousMediaItem()
             PlayerEvent.Forward -> seekForward()
             PlayerEvent.Backward -> seekBack()
             PlayerEvent.Stop -> stop()
@@ -597,10 +804,8 @@ class IosMediaPlayerHandlerImpl(
                 syncQueueData()
             }
             PlayerEvent.ToggleLike -> toggleLike()
-            is PlayerEvent.UpdateVolume -> setVolume(playerEvent.volume)
-            is PlayerEvent.SeekToPosition -> seekTo(playerEvent.position)
-            is PlayerEvent.SeekTo -> seekTo(playerEvent.index, playerEvent.position)
-            else -> {}
+            is PlayerEvent.UpdateVolume -> setVolume(playerEvent.newVolume)
+            is PlayerEvent.UpdateProgress -> seekTo((playerEvent.newProgress * _simpleMediaState.value.duration).toLong())
         }
     }
 
@@ -613,7 +818,7 @@ class IosMediaPlayerHandlerImpl(
             if (song != null) {
                 val newLike = song.liked == 0
                 songRepository.updateLike(newLike, current.mediaId)
-                _nowPlayingState.update { it.copy(liked = newLike) }
+                _nowPlayingState.update { it.copy(songEntity = it.songEntity?.copy(liked = if (newLike) 1 else 0)) }
             }
         }
     }
@@ -622,7 +827,7 @@ class IosMediaPlayerHandlerImpl(
         val current = currentMediaItem ?: return
         coroutineScope.launch {
             songRepository.updateLike(liked, current.mediaId)
-            _nowPlayingState.update { it.copy(liked = liked) }
+            _nowPlayingState.update { it.copy(songEntity = it.songEntity?.copy(liked = if (liked) 1 else 0)) }
         }
     }
 
@@ -632,16 +837,16 @@ class IosMediaPlayerHandlerImpl(
 
     override fun sleepStart(minutes: Int) {
         sleepJob?.cancel()
-        _sleepTimerState.value = SleepTimerState(true, minutes * 60)
+        _sleepTimerState.value = SleepTimerState(false, minutes * 60)
         sleepJob = coroutineScope.launch {
             var remaining = minutes * 60
             while (remaining > 0 && isActive) {
                 delay(1000)
                 remaining -= 1
-                _sleepTimerState.value = SleepTimerState(true, remaining)
+                _sleepTimerState.value = SleepTimerState(false, remaining)
             }
             pause()
-            _sleepTimerState.value = SleepTimerState(false, 0)
+            _sleepTimerState.value = SleepTimerState(true, 0)
         }
     }
 
@@ -657,47 +862,32 @@ class IosMediaPlayerHandlerImpl(
         }
     }
 
-    override fun playNext(mediaItem: GenericMediaItem) {
-        val insertIndex = (_currentSongIndex.value + 1).coerceAtMost(mediaQueue.size)
-        addMediaItem(insertIndex, mediaItem)
+    override fun addMediaItemList(mediaItemList: List<GenericMediaItem>) {
+        mediaQueue.addAll(mediaItemList)
+        originalQueue.addAll(mediaItemList)
+        syncQueueData()
     }
 
-    override fun playNext(track: Track) {
-        playNext(track.toGenericMediaItem())
-    }
-
-    override fun loadMediaItem(mediaItem: GenericMediaItem, playWhenReady: Boolean) {
-        setMediaItem(mediaItem)
-    }
-
-    override fun loadPlaylistOrAlbum(index: Int) {
+    override fun playMediaItemInMediaSource(index: Int) {
         if (index in mediaQueue.indices) {
-            seekTo(index, 0L)
+            _currentSongIndex.value = index
+            loadAndPlayCurrentItem(0L)
         }
     }
 
-    override fun loadMoreCatalog(list: List<Track>) {
-        list.forEach { addMediaItem(it.toGenericMediaItem()) }
+    override fun currentSongIndex(): Int = _currentSongIndex.value
+
+    override fun currentOrderIndex(): Int = _currentSongIndex.value
+
+    override suspend fun swap(from: Int, to: Int) {
+        moveMediaItem(from, to)
     }
 
-    override fun setQueueData(queueData: QueueData) {
-        _queueData.value = queueData
-        mediaQueue.clear()
-        mediaQueue.addAll(queueData.listTrack.map { it.toGenericMediaItem() })
-        originalQueue = ArrayList(mediaQueue)
-        _currentSongIndex.value = queueData.currentIndex.coerceIn(0, (mediaQueue.size - 1).coerceAtLeast(0))
-        loadAndPlayCurrentItem(0L)
-    }
+    override fun resetCrossfade() {}
 
-    override fun getRelated(videoId: String) {
-        coroutineScope.launch {
-            // Can fetch up next suggestions
-        }
-    }
-
-    override fun shufflePlaylist(index: Int) {
+    override fun shufflePlaylist(randomTrackIndex: Int) {
         if (mediaQueue.isEmpty()) return
-        val chosen = mediaQueue.getOrNull(index) ?: mediaQueue.first()
+        val chosen = mediaQueue.getOrNull(randomTrackIndex) ?: mediaQueue.first()
         val rest = mediaQueue.filter { it.mediaId != chosen.mediaId }.shuffled()
         mediaQueue.clear()
         mediaQueue.add(chosen)
@@ -707,22 +897,152 @@ class IosMediaPlayerHandlerImpl(
         loadAndPlayCurrentItem(0L)
     }
 
-    override fun changeAudioOutput(output: AudioOutput) {
-        setAudioOutput(output)
+    override fun loadMore() {}
+
+    override fun getRelated(videoId: String) {}
+
+    override fun setQueueData(queueData: QueueData.Data) {
+        _queueData.update {
+            it?.copy(
+                queueState = QueueData.StateSource.STATE_INITIALIZED,
+                data = queueData,
+            ) ?: QueueData(
+                queueState = QueueData.StateSource.STATE_INITIALIZED,
+                data = queueData,
+            )
+        }
+        mediaQueue.clear()
+        mediaQueue.addAll(queueData.listTracks.map { it.toGenericMediaItem() })
+        originalQueue = ArrayList(mediaQueue)
+        _currentSongIndex.value = 0
+        if (mediaQueue.isNotEmpty()) {
+            loadAndPlayCurrentItem(0L)
+        }
     }
 
-    override fun getAvailableAudioOutputs(): List<AudioOutput> = getAudioOutputs()
+    override fun getCurrentMediaItem(): GenericMediaItem? = currentMediaItem
 
-    override fun seekToPosition(positionMs: Long) {
-        seekTo(positionMs)
+    override suspend fun moveItemUp(position: Int) {
+        if (position > 0 && position < mediaQueue.size) {
+            moveMediaItem(position, position - 1)
+        }
     }
 
-    override fun getProgress(): Long = _simpleMediaState.value.progress
+    override suspend fun moveItemDown(position: Int) {
+        if (position >= 0 && position < mediaQueue.size - 1) {
+            moveMediaItem(position, position + 1)
+        }
+    }
 
-    override fun getPlayerDuration(): Long = _simpleMediaState.value.duration
+    override suspend fun moveItemToPlayNext(position: Int) {
+        val targetIndex = (_currentSongIndex.value + 1).coerceAtMost(mediaQueue.size - 1)
+        if (position in mediaQueue.indices && targetIndex in mediaQueue.indices) {
+            moveMediaItem(position, targetIndex)
+        }
+    }
+
+    override fun addFirstMediaItemToIndex(mediaItem: GenericMediaItem?, index: Int) {
+        if (mediaItem != null) {
+            addMediaItem(index, mediaItem)
+        }
+    }
 
     override fun reset() {
         stop()
         clearMediaItems()
     }
+
+    override suspend fun load(downloaded: Int, index: Int?) {
+        val targetIndex = index ?: 0
+        if (targetIndex in mediaQueue.indices) {
+            seekTo(targetIndex, 0L)
+        }
+    }
+
+    override suspend fun loadMoreCatalog(listTrack: ArrayList<Track>, isAddToQueue: Boolean) {
+        val items = listTrack.map { it.toGenericMediaItem() }
+        if (isAddToQueue) {
+            addMediaItemList(items)
+        } else {
+            items.forEach { addMediaItem(it) }
+        }
+    }
+
+    override suspend fun updateCatalog(downloaded: Int, index: Int?): Boolean = true
+
+    override fun addQueueToPlayer() {}
+
+    override fun loadPlaylistOrAlbum(index: Int?) {
+        val targetIndex = index ?: 0
+        if (targetIndex in mediaQueue.indices) {
+            seekTo(targetIndex, 0L)
+        }
+    }
+
+    override fun setCurrentSongIndex(index: Int) {
+        _currentSongIndex.value = index.coerceIn(0, (mediaQueue.size - 1).coerceAtLeast(0))
+    }
+
+    override suspend fun playNext(track: Track) {
+        val insertIndex = (_currentSongIndex.value + 1).coerceAtMost(mediaQueue.size)
+        addMediaItem(insertIndex, track.toGenericMediaItem())
+    }
+
+    override suspend fun <T> loadMediaItem(anyTrack: T, type: String, index: Int?) {
+        if (anyTrack is Track) {
+            val item = anyTrack.toGenericMediaItem()
+            val targetIndex = index ?: mediaQueue.size
+            addMediaItem(targetIndex, item)
+            _currentSongIndex.value = targetIndex
+            loadAndPlayCurrentItem(0L)
+        }
+    }
+
+    override fun getPlayerDuration(): Long = _simpleMediaState.value.duration
+
+    override fun getProgress(): Long = _simpleMediaState.value.progress
+
+    override fun startProgressUpdate() {
+        startProgressMonitoring()
+    }
+
+    override fun stopProgressUpdate() {
+        progressJob?.cancel()
+    }
+
+    override fun startBufferedUpdate() {}
+
+    override fun stopBufferedUpdate() {}
+
+    override fun mayBeNormalizeVolume() {
+        playerScope.launch {
+            val isNormalize = dataStoreManager.normalizeVolume.firstOrNull() == "true"
+            if (isNormalize) {
+                avPlayer?.volume = 0.85f
+            } else {
+                avPlayer?.volume = 1.0f
+            }
+        }
+    }
+
+    override fun mayBeSaveRecentSong(runBlocking: Boolean) {
+        val song = _nowPlayingState.value.songEntity ?: return
+        playerScope.launch {
+            songRepository.insertSong(song)
+        }
+    }
+
+    override fun mayBeSavePlaybackState() {}
+
+    override fun mayBeRestoreQueue() {}
+
+    override suspend fun restoreQueueAndPlay(): Boolean {
+        if (mediaQueue.isNotEmpty()) {
+            play()
+            return true
+        }
+        return false
+    }
+
+    override fun shouldReleaseOnTaskRemoved(): Boolean = false
 }

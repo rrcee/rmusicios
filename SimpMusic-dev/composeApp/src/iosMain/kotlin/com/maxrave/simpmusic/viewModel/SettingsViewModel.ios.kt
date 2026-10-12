@@ -1,21 +1,29 @@
 package com.maxrave.simpmusic.viewModel
 
 import com.eygraber.uri.Uri
+import com.maxrave.common.Config
 import com.maxrave.domain.repository.CacheRepository
 import com.maxrave.domain.repository.CommonRepository
-import platform.Foundation.NSBundle
-import platform.Foundation.NSDocumentDirectory
-import platform.Foundation.NSHomeDirectory
-import platform.Foundation.NSSearchPathForDirectoriesInDomains
-import platform.Foundation.NSUserDefaults
-import com.maxrave.common.Config
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.addressOf
+import kotlinx.cinterop.usePinned
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import platform.Foundation.NSBundle
+import platform.Foundation.NSData
+import platform.Foundation.NSDocumentDirectory
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSFileSystemFreeSize
 import platform.Foundation.NSFileSystemSize
+import platform.Foundation.NSHomeDirectory
 import platform.Foundation.NSNumber
+import platform.Foundation.NSSearchPathForDirectoriesInDomains
+import platform.Foundation.NSURL
+import platform.Foundation.NSUserDefaults
+import platform.Foundation.dataWithContentsOfFile
+import platform.Foundation.dataWithContentsOfURL
+import platform.Foundation.writeToFile
+import platform.posix.memcpy
 
 @OptIn(ExperimentalForeignApi::class)
 actual suspend fun calculateDataFraction(cacheRepository: CacheRepository): SettingsStorageSectionFraction? {
@@ -55,21 +63,61 @@ actual suspend fun calculateDataFraction(cacheRepository: CacheRepository): Sett
     }
 }
 
-actual suspend fun readPickedFile(uri: Uri): ByteArray = ByteArray(0)
+@OptIn(ExperimentalForeignApi::class)
+actual suspend fun readPickedFile(uri: Uri): ByteArray = withContext(Dispatchers.Default) {
+    runCatching {
+        val path = uri.path ?: uri.toString()
+        val data = NSData.dataWithContentsOfFile(path)
+            ?: NSData.dataWithContentsOfURL(NSURL.fileURLWithPath(path))
+            ?: return@runCatching ByteArray(0)
+        val length = data.length.toInt()
+        if (length == 0) return@runCatching ByteArray(0)
+        val array = ByteArray(length)
+        array.usePinned { pinned ->
+            memcpy(pinned.addressOf(0), data.bytes, data.length)
+        }
+        array
+    }.getOrDefault(ByteArray(0))
+}
 
+@OptIn(ExperimentalForeignApi::class)
 actual suspend fun restoreNative(
     commonRepository: CommonRepository,
     uri: Uri,
     getData: () -> Unit,
 ) {
-    getData()
+    withContext(Dispatchers.Default) {
+        runCatching {
+            val sourcePath = uri.path ?: uri.toString()
+            val sourceData = NSData.dataWithContentsOfFile(sourcePath)
+                ?: NSData.dataWithContentsOfURL(NSURL.fileURLWithPath(sourcePath))
+                ?: return@runCatching
+            commonRepository.databaseDaoCheckpoint()
+            commonRepository.closeDatabase()
+            val dbPath = commonRepository.getDatabasePath() ?: return@runCatching
+            sourceData.writeToFile(dbPath, true)
+            withContext(Dispatchers.Main) {
+                getData()
+            }
+        }
+    }
 }
 
+@OptIn(ExperimentalForeignApi::class)
 actual suspend fun backupNative(
     commonRepository: CommonRepository,
     uri: Uri,
     backupDownloaded: Boolean,
 ) {
+    withContext(Dispatchers.Default) {
+        runCatching {
+            commonRepository.databaseDaoCheckpoint()
+            val dbPath = commonRepository.getDatabasePath() ?: return@runCatching
+            val dbData = NSData.dataWithContentsOfFile(dbPath) ?: return@runCatching
+            val targetPath = uri.path ?: uri.toString()
+            dbData.writeToFile(targetPath, true)
+        }
+    }
 }
 
 actual fun getPackageName(): String =

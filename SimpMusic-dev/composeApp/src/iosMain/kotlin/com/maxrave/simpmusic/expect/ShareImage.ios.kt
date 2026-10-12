@@ -6,7 +6,10 @@ import kotlinx.cinterop.usePinned
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import platform.Foundation.NSData
+import platform.Foundation.NSTemporaryDirectory
+import platform.Foundation.NSURL
 import platform.Foundation.dataWithBytes
+import platform.Foundation.writeToFile
 import platform.UIKit.UIActivityViewController
 import platform.UIKit.UIApplication
 import platform.UIKit.UIImage
@@ -38,10 +41,25 @@ actual suspend fun shareImage(
         val nsData = bytes.usePinned { pinned ->
             NSData.dataWithBytes(pinned.addressOf(0), bytes.size.toULong())
         }
-        val image = UIImage.imageWithData(nsData) ?: nsData
-        val activityVC = UIActivityViewController(activityItems = listOf(image), applicationActivities = null)
-        val rootVC = UIApplication.sharedApplication.keyWindow?.rootViewController
-        rootVC?.presentViewController(activityVC, animated = true, completion = null)
+
+        val tempDir = NSTemporaryDirectory()
+        val tempFilePath = "$tempDir/$fileName"
+        nsData.writeToFile(tempFilePath, true)
+        val fileUrl = NSURL.fileURLWithPath(tempFilePath)
+
+        val activityItems = if (mimeType.startsWith("image/")) {
+            val image = UIImage.imageWithData(nsData)
+            if (image != null) listOf(image, fileUrl) else listOf(fileUrl)
+        } else {
+            listOf(fileUrl)
+        }
+
+        val activityVC = UIActivityViewController(activityItems = activityItems, applicationActivities = null)
+        var topController = UIApplication.sharedApplication.keyWindow?.rootViewController
+        while (topController?.presentedViewController != null) {
+            topController = topController.presentedViewController
+        }
+        topController?.presentViewController(activityVC, animated = true, completion = null)
         true
     }.getOrDefault(false)
 }

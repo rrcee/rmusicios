@@ -15,6 +15,9 @@ actual fun shareUrl(
 ) {
     val items = listOf(url)
     val activityVC = UIActivityViewController(activityItems = items, applicationActivities = null)
-    val rootVC = UIApplication.sharedApplication.keyWindow?.rootViewController
-    rootVC?.presentViewController(activityVC, animated = true, completion = null)
+    var topController = UIApplication.sharedApplication.keyWindow?.rootViewController
+    while (topController?.presentedViewController != null) {
+        topController = topController.presentedViewController
+    }
+    topController?.presentViewController(activityVC, animated = true, completion = null)
 }
