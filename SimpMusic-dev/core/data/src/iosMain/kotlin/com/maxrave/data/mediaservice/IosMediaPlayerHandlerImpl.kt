@@ -170,6 +170,10 @@ class IosMediaPlayerHandlerImpl(
 
     override var playWhenReady: Boolean = true
     override var playbackParameters: GenericPlaybackParameters = GenericPlaybackParameters(1.0f, 1.0f)
+        set(value) {
+            field = value
+            avPlayer?.rate = value.speed
+        }
     override val audioSessionId: Int = 0
     override var volume: Float
         get() = avPlayer?.volume ?: 1f
@@ -435,7 +439,7 @@ class IosMediaPlayerHandlerImpl(
         val cmTime = CMTimeMakeWithSeconds(seconds, 600)
         avPlayer?.seekToTime(cmTime)
         _simpleMediaState.value = SimpleMediaState.Progress(positionMs)
-        listeners.forEach { it.onPositionDiscontinuity(positionMs) }
+        listeners.forEach { it.onSeeked(positionMs) }
     }
 
     override fun seekTo(mediaItemIndex: Int, positionMs: Long) {
@@ -625,20 +629,18 @@ class IosMediaPlayerHandlerImpl(
     override fun refreshAudioOutputs() {
         runCatching {
             val session = AVAudioSession.sharedInstance()
-            val currentOutputs = session.currentRoute.outputs
+            val currentOutputs = session.currentRoute.outputs as? List<*> ?: emptyList<Any>()
             val list = mutableListOf<AudioOutput>()
-            for (i in 0 until currentOutputs.count().toInt()) {
-                val portDesc = currentOutputs.objectAtIndex(i.toULong()) as? AVAudioSessionPortDescription
-                if (portDesc != null) {
-                    val kind = when (portDesc.portType) {
-                        AVAudioSessionPortHeadphones -> AudioOutputKind.WIRED
-                        AVAudioSessionPortBluetoothHFP,
-                        AVAudioSessionPortBluetoothA2DP,
-                        AVAudioSessionPortBluetoothLE -> AudioOutputKind.BLUETOOTH
-                        else -> AudioOutputKind.DEVICE_SPEAKER
-                    }
-                    list.add(AudioOutput(id = portDesc.UID, name = portDesc.portName, kind = kind, isActive = true))
+            for (port in currentOutputs) {
+                val portDesc = port as? AVAudioSessionPortDescription ?: continue
+                val kind = when (portDesc.portType) {
+                    AVAudioSessionPortHeadphones -> AudioOutputKind.WIRED
+                    AVAudioSessionPortBluetoothHFP,
+                    AVAudioSessionPortBluetoothA2DP,
+                    AVAudioSessionPortBluetoothLE -> AudioOutputKind.BLUETOOTH
+                    else -> AudioOutputKind.DEVICE_SPEAKER
                 }
+                list.add(AudioOutput(id = portDesc.UID, name = portDesc.portName, kind = kind, isActive = true))
             }
             if (list.isEmpty()) {
                 list.add(AudioOutput(id = "default", name = "Speaker", kind = AudioOutputKind.DEVICE_SPEAKER, isActive = true))
@@ -653,11 +655,28 @@ class IosMediaPlayerHandlerImpl(
         val item = currentMediaItem ?: return
         _nowPlaying.value = item
         loadArtwork(item.metadata.artworkUri)
+        val track = _queueData.value?.data?.listTracks?.find { it.videoId == item.mediaId }
+            ?: Track(
+                album = null,
+                artists = item.metadata.artist?.let { listOf(com.maxrave.domain.data.model.searchResult.songs.Artist(name = it, id = null)) },
+                duration = null,
+                durationSeconds = null,
+                isAvailable = true,
+                isExplicit = false,
+                likeStatus = null,
+                thumbnails = item.metadata.artworkUri?.let { listOf(com.maxrave.domain.data.model.searchResult.songs.Thumbnail(height = 544, width = 544, url = it)) },
+                title = item.metadata.title ?: "",
+                videoId = item.mediaId,
+                videoType = null,
+                category = null,
+                feedbackTokens = null,
+                resultType = null,
+            )
         _nowPlayingState.update {
             it.copy(
                 mediaItem = item,
-                track = item.toTrack(),
-                songEntity = item.toTrack().toSongEntity(),
+                track = track,
+                songEntity = track.toSongEntity(),
             )
         }
 
@@ -669,15 +688,16 @@ class IosMediaPlayerHandlerImpl(
     private suspend fun resolveAndPlayStream(item: GenericMediaItem, startPositionMs: Long) {
         val videoId = item.mediaId
         try {
-            val streamRes = streamRepository.getStream(videoId)
-            val playableUrl = when (streamRes) {
-                is Resource.Success -> streamRes.data?.firstOrNull()?.url
-                else -> null
-            }
+            val playableUrl: String? = streamRepository.getStream(
+                dataStoreManager = dataStoreManager,
+                videoId = videoId,
+                isDownloading = false,
+                isVideo = false,
+            ).firstOrNull()
 
             if (playableUrl.isNullOrEmpty()) {
                 Logger.e(TAG, "Failed to resolve stream for $videoId")
-                pushPlayerError(PlayerError(videoId, "No stream url available"))
+                pushPlayerError(PlayerError(-1, "STREAM_ERROR", "No stream url available for $videoId"))
                 return
             }
 
@@ -703,24 +723,43 @@ class IosMediaPlayerHandlerImpl(
             syncQueueData()
         } catch (e: Exception) {
             Logger.e(TAG, "Error playing track: ${e.message}")
-            pushPlayerError(PlayerError(videoId, e.message ?: "Playback error"))
+            pushPlayerError(PlayerError(-1, "PLAYBACK_ERROR", e.message ?: "Playback error"))
         }
     }
 
     private fun syncQueueData() {
-        val currentQueue = mediaQueue.map { it.toTrack() }
+        val existingTracks = _queueData.value?.data?.listTracks ?: emptyList()
+        val trackMap = existingTracks.associateBy { it.videoId }
+        val currentQueue = mediaQueue.map { item ->
+            trackMap[item.mediaId] ?: Track(
+                album = null,
+                artists = item.metadata.artist?.let { listOf(com.maxrave.domain.data.model.searchResult.songs.Artist(name = it, id = null)) },
+                duration = null,
+                durationSeconds = null,
+                isAvailable = true,
+                isExplicit = false,
+                likeStatus = null,
+                thumbnails = item.metadata.artworkUri?.let { listOf(com.maxrave.domain.data.model.searchResult.songs.Thumbnail(height = 544, width = 544, url = it)) },
+                title = item.metadata.title ?: "",
+                videoId = item.mediaId,
+                videoType = null,
+                category = null,
+                feedbackTokens = null,
+                resultType = null,
+            )
+        }
         _queueData.update {
             it?.copy(
                 queueState = QueueData.StateSource.STATE_INITIALIZED,
                 data = it.data.copy(
-                    listTracks = currentQueue,
+                    listTracks = ArrayList(currentQueue),
                     playlistType = PlaylistType.PLAYLIST,
                     playlistName = "Now Playing",
                 ),
             ) ?: QueueData(
                 queueState = QueueData.StateSource.STATE_INITIALIZED,
                 data = QueueData.Data(
-                    listTracks = currentQueue,
+                    listTracks = ArrayList(currentQueue),
                     playlistType = PlaylistType.PLAYLIST,
                     playlistName = "Now Playing",
                 ),
@@ -777,7 +816,7 @@ class IosMediaPlayerHandlerImpl(
     override fun toggleLike() {
         val current = currentMediaItem ?: return
         coroutineScope.launch {
-            val song = songRepository.getSong(current.mediaId).firstOrNull()
+            val song = songRepository.getSongById(current.mediaId).firstOrNull()
             val newLike = if (song != null) !song.liked else !_controlState.value.isLiked
             songRepository.updateLikeStatus(current.mediaId, if (newLike) 1 else 0)
             _controlState.update { it.copy(isLiked = newLike) }
@@ -952,9 +991,29 @@ class IosMediaPlayerHandlerImpl(
     }
 
     override suspend fun <T> loadMediaItem(anyTrack: T, type: String, index: Int?) {
-        if (anyTrack is Track) {
-            val item = anyTrack.toGenericMediaItem()
+        val track = when (anyTrack) {
+            is Track -> anyTrack
+            is SongEntity -> anyTrack.toTrack()
+            else -> null
+        }
+        if (track != null) {
+            val item = track.toGenericMediaItem()
             val targetIndex = index ?: mediaQueue.size
+            _queueData.update { q ->
+                val currentList = ArrayList(q?.data?.listTracks ?: emptyList())
+                if (targetIndex in 0..currentList.size) {
+                    currentList.add(targetIndex, track)
+                } else {
+                    currentList.add(track)
+                }
+                q?.copy(
+                    queueState = QueueData.StateSource.STATE_INITIALIZED,
+                    data = q.data.copy(listTracks = currentList),
+                ) ?: QueueData(
+                    queueState = QueueData.StateSource.STATE_INITIALIZED,
+                    data = QueueData.Data(listTracks = currentList),
+                )
+            }
             addMediaItem(targetIndex, item)
             _currentSongIndex.value = targetIndex
             loadAndPlayCurrentItem(0L)
