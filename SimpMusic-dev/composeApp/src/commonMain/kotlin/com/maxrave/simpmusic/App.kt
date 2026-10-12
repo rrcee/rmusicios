@@ -481,13 +481,14 @@ fun App(
     val isTablet = windowSize.isWidthAtLeastBreakpoint(WIDTH_DP_MEDIUM_LOWER_BOUND)
     val isTabletLandscape = isTablet && currentOrientation() == Orientation.LANDSCAPE
 
-    AppTheme(
+        val isLiquidGlassOn = isLiquidGlassEnabled == TRUE || getPlatform() == Platform.iOS
+        AppTheme(
         themeMode = themeMode,
         themeColorSource = themeColorSource,
         customThemeColor = parseThemeColorHex(customThemeColorHex),
         // Desktop is unconditionally true — the liquid-glass setting row is Android-only, and the
         // Desktop capsule player is glass by design. Same rule as MiniPlayer's useGlassSurface.
-        liquidGlassEnabled = isLiquidGlassEnabled == TRUE || getPlatform() == Platform.Desktop,
+        liquidGlassEnabled = isLiquidGlassOn || getPlatform() == Platform.Desktop,
     ) {
         // Allow all builds unconditionally
         // Backdrop base must match the theme: white page → white glass, dark/AMOLED → black glass.
@@ -524,12 +525,12 @@ fun App(
                         enter = fadeIn() + slideInHorizontally(),
                         exit = fadeOut(),
                     ) {
-                        // On Android both materials go through the folding bar, which draws the mini
+                        // On Android and iOS both materials go through the folding bar, which draws the mini
                         // player itself. Desktop keeps the always-open flat bar under its own one.
-                        val useFoldingBar = getPlatform() == Platform.Android || isLiquidGlassEnabled == TRUE
+                        val useFoldingBar = getPlatform() == Platform.Android || getPlatform() == Platform.iOS || isLiquidGlassEnabled == TRUE
                         Column {
                             AnimatedVisibility(
-                                isShowMiniPlayer && !useFoldingBar && isLiquidGlassEnabled == DataStoreManager.FALSE,
+                                isShowMiniPlayer && !useFoldingBar && !isLiquidGlassOn,
                                 enter = fadeIn() + slideInHorizontally(),
                                 exit = fadeOut(),
                             ) {
@@ -564,7 +565,7 @@ fun App(
                                     isScrolledToTop = isScrolledToTop,
                                     showAnalyticsTab = showAnalyticsTab,
                                     showMixForYouTab = showMixForYouTab,
-                                    liquidGlass = isLiquidGlassEnabled == TRUE,
+                                    liquidGlass = isLiquidGlassOn,
                                 ) { klass ->
                                     viewModel.reloadDestination(klass)
                                 }
@@ -586,7 +587,7 @@ fun App(
                     Modifier
                         .fillMaxSize()
                         .then(
-                            if (isLiquidGlassEnabled == TRUE && !isTablet) {
+                            if (isLiquidGlassOn && !isTablet) {
                                 Modifier.layerBackdrop(backdrop)
                             } else {
                                 Modifier

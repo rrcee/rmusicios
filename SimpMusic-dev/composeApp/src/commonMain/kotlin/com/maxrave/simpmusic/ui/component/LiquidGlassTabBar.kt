@@ -1,6 +1,5 @@
 package com.maxrave.simpmusic.ui.component
 
-import android.os.SystemClock
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.MutatorMutex
@@ -81,8 +80,12 @@ private val BlobHeight = 56.dp
 // tab wide, so without this it sits flush against the capsule's rounded end.
 private val BarInset = 6.dp
 
+private val timeSource = kotlin.time.TimeSource.Monotonic
+private val startTimeMark = timeSource.markNow()
+private fun currentUptimeMillis(): Long = startTimeMark.elapsedNow().inWholeMilliseconds
+
 /**
- * iOS 26 / Kyant-style liquid sliding tab bar.
+ * iOS / Kyant-style liquid sliding tab bar.
  *
  * Three stacked layers (bottom → top):
  *  1. a dark, luminance-adaptive glass **capsule** (the same [drawInteractiveGlass] as the MiniPlayer),
@@ -92,8 +95,7 @@ private val BarInset = 6.dp
  *     the blob is drawn over it).
  *
  * Adapted from Kyant's `LiquidBottomTabs`/`DampedDragAnimation` to SimpMusic's
- * [BottomNavScreen]s, fixed tab width (to fit the existing ConstraintLayout) and the
- * bottom bar's luminance sampling.
+ * [BottomNavScreen]s, fixed tab width and the bottom bar's luminance sampling.
  *
  * @param layer shared graphics layer the capsule records into for luminance sampling.
  * @param luminance current sampled luminance (0..1) driving the glass brightness.
@@ -114,17 +116,9 @@ fun LiquidGlassTabBar(
 ) {
     val density = LocalDensity.current
     val tabsCount = tabs.size
-    // Every tab must be the same width — the blob's position is `index * tabWidth` and the drag
-    // gesture divides by it, so uneven tabs would put the blob off its icon. What must NOT be
-    // fixed is the number itself: with a hardcoded TabWidth the capsule simply grew past the
-    // screen once a fourth tab appeared, and what fell off the right edge was the search FAB.
-    // [availableWidth] is the space the row actually hands this capsule, so the tabs divide up
-    // what exists instead of a guess. TabWidth stays as the cap, so 2 tabs on a tablet do not
-    // stretch into slabs.
     val tabWidth = tabWidthFor(tabsCount, availableWidth)
     val fullWidth = tabWidth * tabsCount + BarInset * 2
     val tabWidthPx = with(density) { tabWidth.toPx() }
-    // The lambdas below are remembered; without this they would keep the width from first layout.
     val currentTabWidthPx by rememberUpdatedState(tabWidthPx)
     val isLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
     val animationScope = rememberCoroutineScope()
@@ -132,8 +126,6 @@ fun LiquidGlassTabBar(
     val isDark = LocalIsDarkTheme.current
 
     var currentIndex by remember { mutableIntStateOf(selectedTab.coerceAtLeast(0)) }
-    // [0] = a real drag happened (vs a pure tap) — keeps the blob from snapping back
-    // and stealing a tab tap.
     val draggedFlag = remember { booleanArrayOf(false) }
 
     val dampedDrag =
@@ -144,16 +136,12 @@ fun LiquidGlassTabBar(
                 valueRange = 0f..(tabsCount - 1).toFloat(),
                 visibilityThreshold = 0.001f,
                 initialScale = 1f,
-                // On press the blob inflates from 56dp up to ~76dp — past the 64dp bar height — so it
-                // visibly bulges out of the capsule row (Apple Music style), then springs back on release.
                 pressedScale = 76f / 56f,
                 onDragStarted = { draggedFlag[0] = false },
                 onDragStopped = {
                     if (draggedFlag[0]) {
                         val target = targetValue.roundToInt().coerceIn(0, tabsCount - 1)
                         currentIndex = target
-                        // Always snap the blob to a tab — even if the rounded target is unchanged —
-                        // otherwise `value` settles mid-slide and the blob sticks after release.
                         animateToValue(target.toFloat())
                     }
                 },
@@ -167,18 +155,14 @@ fun LiquidGlassTabBar(
             )
         }
 
-    // Keep the blob in sync when selection changes from outside (e.g. back stack).
     LaunchedEffect(selectedTab) {
         if (selectedTab >= 0 && currentIndex != selectedTab) currentIndex = selectedTab
     }
-    // Drive navigation + blob animation from the internal current index.
     LaunchedEffect(dampedDrag) {
         snapshotFlow { currentIndex }
             .drop(1)
             .collectLatest { index ->
                 dampedDrag.animateToValue(index.toFloat())
-                // Taps already navigate directly from onClick; only drag-snap navigates here
-                // (prevents a double onTabSelected and avoids the dropped-tap race).
                 if (draggedFlag[0]) onTabSelected(index)
             }
     }
@@ -188,23 +172,11 @@ fun LiquidGlassTabBar(
             modifier
                 .height(BarHeight)
                 .width(fullWidth)
-                // Press detection for the whole capsule lives on the outer Box — it's the common
-                // ancestor of the glass, blob and tab Row, so it sees the touch on the Initial pass
-                // before the children. The capsule glass sits underneath the Row and would never get
-                // the event on its own; it only reads barInteraction to draw the scale + glow.
                 .pointerInput(barInteraction) { barInteraction.detectPress(this) },
         contentAlignment = Alignment.CenterStart,
     ) {
-        // 1) Dark frosted glass capsule — the exact same glass the MiniPlayer uses, so the bottom
-        // bar and the mini player read as one material (drawInteractiveGlass, no white veil).
-        // barInteraction makes the whole capsule respond to a press (scale + touch glow) like iOS;
-        // it's observe-only, so tab taps and the blob drag keep working.
         Box(Modifier.matchParentSize().drawInteractiveGlass(isDark, backdrop, layer, { luminance.value }, CapsuleShape, barInteraction))
 
-        // The bar may be handed any width from the folded circle up to its full width, and the glass
-        // above follows it. The blob and the tabs keep their full-width layout and are clipped to
-        // the glass instead, so a growing glass uncovers them from the start edge. The clip is off
-        // at rest, where the pressed blob has to bulge out of the capsule.
         Box(Modifier.matchParentSize().unfoldingTabs(fullWidth, CapsuleShape)) {
             Box(
                 Modifier
@@ -212,13 +184,9 @@ fun LiquidGlassTabBar(
                     .size(fullWidth, BarHeight),
                 contentAlignment = Alignment.CenterStart,
             ) {
-                // 2) Frosted blob selection indicator — slides behind the icons.
                 Box(
                     Modifier
                         .graphicsLayer {
-                            // Per-tab slot start, no inset: the pill is exactly one tab wide, so any bias
-                            // here shifts it off its own tab (it used to be inset 4dp to match a pill that
-                            // was 8dp narrower than the slot).
                             translationX =
                                 (if (isLtr) dampedDrag.value else (tabsCount - 1) - dampedDrag.value) * tabWidthPx +
                                 BarInset.toPx()
@@ -226,8 +194,6 @@ fun LiquidGlassTabBar(
                             backdrop = backdrop,
                             shape = { CapsuleShape },
                             effects = {
-                                // Luminance only drives the blur here (frosted pill); brightness/contrast stay
-                                // neutral and the "đục đen" darkening is applied in onDrawSurface.
                                 val l = (luminance.value * 2f - 1f).let { sign(it) * it * it }
                                 val progress = dampedDrag.pressProgress
                                 vibrancy()
@@ -237,8 +203,6 @@ fun LiquidGlassTabBar(
                                     saturation = 1.5f,
                                 )
                                 blur(
-                                    // Stronger than the bar's blur so the active pill reads as a clearly
-                                    // frosted surface (the previous amount was too weak / too close to the bar).
                                     (if (l > 0f) lerp(8f.dp.toPx(), 16f.dp.toPx(), l) else lerp(8f.dp.toPx(), 2f.dp.toPx(), -l)) +
                                         20f.dp.toPx(),
                                 )
@@ -258,9 +222,6 @@ fun LiquidGlassTabBar(
                                 scaleY *= 1f - (velocity * 0.25f).fastCoerceIn(-0.2f, 0.2f)
                             },
                             onDrawSurface = {
-                                // Active pill sits a touch above the bar. Dark theme: "đục đen" (black veil that
-                                // scales with the backdrop). Light theme: only a faint grey so the pill stays
-                                // clearly lighter than a heavy slab — the highlight/shadow do the separating.
                                 val lumNorm = ((luminance.value - 0.3f) / 0.5f).coerceIn(0f, 1f)
                                 val darken =
                                     if (isDark) lerp(0.22f, 0.55f, lumNorm) else lerp(0.06f, 0.14f, lumNorm)
@@ -270,10 +231,7 @@ fun LiquidGlassTabBar(
                         .height(BlobHeight),
                 )
 
-                // 3) Crisp icons + labels on top, carrying the blob drag gesture.
                 Row(
-                    // Tabs tile exactly [BarInset..+tabWidth..], the same origin the blob uses above — any
-                    // mismatch here puts the icon off the centre of its own pill.
                     Modifier
                         .matchParentSize()
                         .padding(horizontal = BarInset)
@@ -287,13 +245,8 @@ fun LiquidGlassTabBar(
                             width = tabWidth,
                         ) {
                             if (position == currentIndex) {
-                                // Re-tapping the active tab: snapshotFlow won't fire (state unchanged),
-                                // so call onTabSelected directly to keep the reload / scroll-to-top behaviour.
                                 onTabSelected(position)
                             } else {
-                                // Navigate immediately on tap. Don't route this through snapshotFlow: a
-                                // concurrent drag-stop on the same Row can reset currentIndex back before the
-                                // flow emits, which silently drops the tap (observed: currentIndex stuck at 0).
                                 currentIndex = position
                                 onTabSelected(position)
                             }
@@ -303,7 +256,6 @@ fun LiquidGlassTabBar(
             }
         }
 
-        // 4) Folded into the circle, the bar shows [collapsedContent] in place of its tabs.
         if (collapsedContent != null) {
             Box(Modifier.matchParentSize().foldedCircle(fullWidth), contentAlignment = Alignment.Center) {
                 collapsedContent()
@@ -312,7 +264,6 @@ fun LiquidGlassTabBar(
     }
 }
 
-// Every tab is the same width; see the note where LiquidGlassTabBar reads it.
 private fun tabWidthFor(
     tabsCount: Int,
     availableWidth: Dp,
@@ -323,7 +274,6 @@ private fun tabWidthFor(
         TabWidth
     }
 
-/** Full width of the expanded [LiquidGlassTabBar] for [tabsCount] tabs given [availableWidth]. */
 internal fun liquidGlassTabBarWidth(
     tabsCount: Int,
     availableWidth: Dp,
@@ -363,13 +313,6 @@ private fun LiquidGlassTab(
     }
 }
 
-/**
- * Spring-damped 1-D drag animation: tracks a continuous [value] across the tab
- * range, the drag [velocity] (for squash/stretch), a [pressProgress] (rest → lifted
- * glass) and decoupled [scaleX]/[scaleY] springs. Project-local port of Kyant's
- * catalog `DampedDragAnimation` (uses [withFrameNanos] for `awaitFrame` and
- * [SystemClock] for velocity timestamps).
- */
 class DampedDragAnimation(
     private val animationScope: CoroutineScope,
     val initialValue: Float,
@@ -469,7 +412,7 @@ class DampedDragAnimation(
     }
 
     private fun updateVelocity() {
-        velocityTracker.addPosition(SystemClock.uptimeMillis(), Offset(value, 0f))
+        velocityTracker.addPosition(currentUptimeMillis(), Offset(value, 0f))
         val targetVelocity =
             velocityTracker.calculateVelocity().x / (valueRange.endInclusive - valueRange.start)
         animationScope.launch { velocityAnimation.animateTo(targetVelocity, velocityAnimationSpec) }

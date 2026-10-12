@@ -9,31 +9,17 @@
 /* Begin PBXBuildFile section */
 		A10000012C00000000000001 /* SimpMusicApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000012C00000000000001 /* SimpMusicApp.swift */; };
 		A10000022C00000000000001 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000022C00000000000001 /* ContentView.swift */; };
-		A10000032C00000000000001 /* NativeSimpMusicView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000032C00000000000001 /* NativeSimpMusicView.swift */; };
-		A10000042C00000000000001 /* AudioPlayerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000042C00000000000001 /* AudioPlayerService.swift */; };
-		A10000052C00000000000001 /* NowPlayingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000052C00000000000001 /* NowPlayingView.swift */; };
-		A10000062C00000000000001 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000062C00000000000001 /* HomeView.swift */; };
-		A10000072C00000000000001 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000072C00000000000001 /* SearchView.swift */; };
-		A10000082C00000000000001 /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000082C00000000000001 /* LibraryView.swift */; };
 		A10000092C00000000000001 /* SplashScreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000102C00000000000001 /* SplashScreenView.swift */; };
-		A10000102C00000000000001 /* LiquidGlassModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000112C00000000000001 /* LiquidGlassModifier.swift */; };
-		A10000112C00000000000001 /* MixView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000122C00000000000001 /* MixView.swift */; };
+		A10000202C00000000000001 /* ComposeApp.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B10000202C00000000000001 /* ComposeApp.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		B10000002C00000000000001 /* SimpMusic.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SimpMusic.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B10000012C00000000000001 /* SimpMusicApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpMusicApp.swift; sourceTree = "<group>"; };
 		B10000022C00000000000001 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		B10000032C00000000000001 /* NativeSimpMusicView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeSimpMusicView.swift; sourceTree = "<group>"; };
-		B10000042C00000000000001 /* AudioPlayerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerService.swift; sourceTree = "<group>"; };
-		B10000052C00000000000001 /* NowPlayingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingView.swift; sourceTree = "<group>"; };
-		B10000062C00000000000001 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
-		B10000072C00000000000001 /* SearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchView.swift; sourceTree = "<group>"; };
-		B10000082C00000000000001 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
 		B10000092C00000000000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B10000102C00000000000001 /* SplashScreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplashScreenView.swift; sourceTree = "<group>"; };
-		B10000112C00000000000001 /* LiquidGlassModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiquidGlassModifier.swift; sourceTree = "<group>"; };
-		B10000122C00000000000001 /* MixView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MixView.swift; sourceTree = "<group>"; };
+		B10000202C00000000000001 /* ComposeApp.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ComposeApp.framework; path = ComposeApp.framework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -41,6 +27,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A10000202C00000000000001 /* ComposeApp.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -51,8 +38,17 @@
 			isa = PBXGroup;
 			children = (
 				D10000012C00000000000001 /* SimpMusic */,
+				D10000042C00000000000001 /* Frameworks */,
 				D10000022C00000000000001 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		D10000042C00000000000001 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				B10000202C00000000000001 /* ComposeApp.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 		D10000012C00000000000001 /* SimpMusic */ = {
@@ -61,7 +57,6 @@
 				B10000012C00000000000001 /* SimpMusicApp.swift */,
 				B10000022C00000000000001 /* ContentView.swift */,
 				B10000102C00000000000001 /* SplashScreenView.swift */,
-				D10000032C00000000000001 /* Native */,
 				B10000092C00000000000001 /* Info.plist */,
 			);
 			path = SimpMusic;
@@ -73,21 +68,6 @@
 				B10000002C00000000000001 /* SimpMusic.app */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		D10000032C00000000000001 /* Native */ = {
-			isa = PBXGroup;
-			children = (
-				B10000032C00000000000001 /* NativeSimpMusicView.swift */,
-				B10000042C00000000000001 /* AudioPlayerService.swift */,
-				B10000052C00000000000001 /* NowPlayingView.swift */,
-				B10000062C00000000000001 /* HomeView.swift */,
-				B10000072C00000000000001 /* SearchView.swift */,
-				B10000082C00000000000001 /* LibraryView.swift */,
-				B10000112C00000000000001 /* LiquidGlassModifier.swift */,
-				B10000122C00000000000001 /* MixView.swift */,
-			);
-			path = Native;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -160,15 +140,7 @@
 			files = (
 				A10000012C00000000000001 /* SimpMusicApp.swift in Sources */,
 				A10000022C00000000000001 /* ContentView.swift in Sources */,
-				A10000032C00000000000001 /* NativeSimpMusicView.swift in Sources */,
-				A10000042C00000000000001 /* AudioPlayerService.swift in Sources */,
-				A10000052C00000000000001 /* NowPlayingView.swift in Sources */,
-				A10000062C00000000000001 /* HomeView.swift in Sources */,
-				A10000072C00000000000001 /* SearchView.swift in Sources */,
-				A10000082C00000000000001 /* LibraryView.swift in Sources */,
 				A10000092C00000000000001 /* SplashScreenView.swift in Sources */,
-				A10000102C00000000000001 /* LiquidGlassModifier.swift in Sources */,
-				A10000112C00000000000001 /* MixView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -234,6 +206,14 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/../../composeApp/build/bin/iosArm64/releaseFramework",
+					"$(SRCROOT)/../../composeApp/build/bin/iosArm64/debugFramework",
+					"$(SRCROOT)/../../composeApp/build/bin/iosSimulatorArm64/releaseFramework",
+					"$(SRCROOT)/../../composeApp/build/bin/iosSimulatorArm64/debugFramework",
+					"$(BUILT_PRODUCTS_DIR)",
+				);
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SimpMusic/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -241,6 +221,11 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.2.1;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					"ComposeApp",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.rmusic.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -256,6 +241,14 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/../../composeApp/build/bin/iosArm64/releaseFramework",
+					"$(SRCROOT)/../../composeApp/build/bin/iosArm64/debugFramework",
+					"$(SRCROOT)/../../composeApp/build/bin/iosSimulatorArm64/releaseFramework",
+					"$(SRCROOT)/../../composeApp/build/bin/iosSimulatorArm64/debugFramework",
+					"$(BUILT_PRODUCTS_DIR)",
+				);
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SimpMusic/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -263,6 +256,11 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.2.1;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					"ComposeApp",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.rmusic.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;

@@ -35,19 +35,23 @@ jobs:
         working-directory: SimpMusic-dev
         run: |
           chmod +x ./gradlew
-          ./gradlew :composeApp:embedAndSignAppleFrameworkForXcode -Pkotlin.native.cocoapods.target=ios -PCONFIGURATION=Release -PPLATFORM_NAME=iphoneos -PARCH=arm64 || ./gradlew :composeApp:packForXcode || true
+          ./gradlew :composeApp:linkReleaseFrameworkIosArm64 --stacktrace
+          mkdir -p iosApp/Frameworks
+          cp -R composeApp/build/bin/iosArm64/releaseFramework/ComposeApp.framework iosApp/Frameworks/
 
       - name: Build iOS Application Archive
         working-directory: SimpMusic-dev
         run: |
           cd iosApp
           set -o pipefail
+          FRAMEWORK_DIR="$(pwd)/../composeApp/build/bin/iosArm64/releaseFramework"
           xcodebuild archive \
             -project SimpMusic.xcodeproj \
             -scheme SimpMusic \
             -configuration Release \
             -destination "generic/platform=iOS" \
             -archivePath "../build/SimpMusic.xcarchive" \
+            FRAMEWORK_SEARCH_PATHS="\"$FRAMEWORK_DIR\" \"$(pwd)/Frameworks\"" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
