@@ -286,7 +286,8 @@ private fun LiquidGlassTab(
     width: Dp,
     onClick: () -> Unit,
 ) {
-    val color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+    val activeRed = Color(0xFFFA2D48)
+    val color = if (selected) activeRed else Color.White.copy(alpha = 0.65f)
     Column(
         Modifier
             .width(width)
@@ -305,7 +306,9 @@ private fun LiquidGlassTab(
             screen.icon()
             Text(
                 text = stringResource(screen.title),
-                style = typo().bodySmall,
+                style = typo().bodySmall.copy(
+                    fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Normal,
+                ),
                 color = color,
                 maxLines = 1,
             )

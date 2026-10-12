@@ -101,8 +101,9 @@ actual fun LiquidGlassAppBottomNavigationBar(
         listOfNotNull(
             BottomNavScreen.Home,
             BottomNavScreen.MixForYou.takeIf { showMixForYouTab },
-            BottomNavScreen.Analytics.takeIf { showAnalyticsTab },
             BottomNavScreen.Library,
+            BottomNavScreen.Search,
+            BottomNavScreen.Analytics.takeIf { showAnalyticsTab },
         )
 
     var selectedIndex by rememberSaveable {
@@ -203,7 +204,7 @@ actual fun LiquidGlassAppBottomNavigationBar(
                     bottom = 8.dp,
                 ),
     ) {
-        val capsuleBudget = maxWidth - BarEdgePadding * 2 - SearchGap - SearchSize
+        val capsuleBudget = maxWidth - BarEdgePadding * 2
 
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -234,57 +235,24 @@ actual fun LiquidGlassAppBottomNavigationBar(
             }
 
             if (liquidGlass) {
-                Row(
-                    modifier = Modifier.wrapContentSize(),
-                    horizontalArrangement = Arrangement.spacedBy(SearchGap),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    LiquidGlassTabBar(
-                        tabs = barTabs,
-                        selectedTab = barTabs.indexOfFirst { it.ordinal == selectedIndex },
-                        backdrop = backdrop,
-                        layer = layer,
-                        luminance = luminance,
-                        availableWidth = capsuleBudget,
-                        onTabSelected = { position -> selectTab(barTabs[position].ordinal) },
-                        collapsedContent = collapsedCircle,
-                    )
-
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(SearchSize)
-                                .drawInteractiveGlass(
-                                    LocalIsDarkTheme.current,
-                                    backdrop,
-                                    null,
-                                    { luminance.value },
-                                    CircleShape,
-                                    searchFabInteraction,
-                                ).clickable { selectTab(BottomNavScreen.Search.ordinal) },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        BottomNavScreen.Search.icon()
-                    }
-                }
+                LiquidGlassTabBar(
+                    tabs = barTabs,
+                    selectedTab = barTabs.indexOfFirst { it.ordinal == selectedIndex },
+                    backdrop = backdrop,
+                    layer = layer,
+                    luminance = luminance,
+                    availableWidth = capsuleBudget,
+                    onTabSelected = { position -> selectTab(barTabs[position].ordinal) },
+                    collapsedContent = collapsedCircle,
+                )
             } else {
-                Row(
-                    modifier = Modifier.wrapContentSize(),
-                    horizontalArrangement = Arrangement.spacedBy(SearchGap),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    FlatTabBar(
-                        tabs = barTabs,
-                        selectedIndex = selectedIndex,
-                        availableWidth = capsuleBudget,
-                        onTabSelected = { screen -> selectTab(screen.ordinal) },
-                        collapsedContent = collapsedCircle,
-                    )
-                    FlatSearchButton(
-                        selected = selectedIndex == BottomNavScreen.Search.ordinal,
-                        onClick = { selectTab(BottomNavScreen.Search.ordinal) },
-                    )
-                }
+                FlatTabBar(
+                    tabs = barTabs,
+                    selectedIndex = selectedIndex,
+                    availableWidth = capsuleBudget,
+                    onTabSelected = { screen -> selectTab(screen.ordinal) },
+                    collapsedContent = collapsedCircle,
+                )
             }
         }
     }
