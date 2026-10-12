@@ -12,6 +12,7 @@ actual fun getDatabaseBuilder(converters: Converters): RoomDatabase.Builder<Musi
     val dbFilePath = documentDirectory() + "/$DB_NAME"
     return Room.databaseBuilder<MusicDatabase>(
         name = dbFilePath,
+        factory = { MusicDatabaseConstructor.initialize() }
     ).addTypeConverter(converters)
 }
 

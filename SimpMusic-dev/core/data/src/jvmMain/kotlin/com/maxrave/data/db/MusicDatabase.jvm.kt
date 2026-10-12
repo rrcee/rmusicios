@@ -10,7 +10,8 @@ actual fun getDatabaseBuilder(
     converters: Converters
 ): RoomDatabase.Builder<MusicDatabase> {
     return Room.databaseBuilder<MusicDatabase>(
-        name = getDatabasePath()
+        name = getDatabasePath(),
+        factory = { MusicDatabaseConstructor.initialize() }
     ).addTypeConverter(converters)
 }
 
