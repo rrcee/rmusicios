@@ -62,8 +62,15 @@ import platform.AVFoundation.play
 import platform.AVFoundation.seekToTime
 import platform.CoreMedia.CMTimeGetSeconds
 import platform.CoreMedia.CMTimeMakeWithSeconds
+import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.coroutines.withContext
+import platform.Foundation.NSData
+import platform.Foundation.dataWithContentsOfURL
 import platform.Foundation.NSURL
+import platform.MediaPlayer.MPMediaItemArtwork
+import platform.MediaPlayer.MPMediaItemPropertyAlbumTitle
 import platform.MediaPlayer.MPMediaItemPropertyArtist
+import platform.MediaPlayer.MPMediaItemPropertyArtwork
 import platform.MediaPlayer.MPMediaItemPropertyPlaybackDuration
 import platform.MediaPlayer.MPMediaItemPropertyTitle
 import platform.MediaPlayer.MPNowPlayingInfoCenter
@@ -71,6 +78,7 @@ import platform.MediaPlayer.MPNowPlayingInfoPropertyElapsedPlaybackTime
 import platform.MediaPlayer.MPNowPlayingInfoPropertyPlaybackRate
 import platform.MediaPlayer.MPRemoteCommandCenter
 import platform.MediaPlayer.MPRemoteCommandHandlerStatusSuccess
+import platform.UIKit.UIImage
 
 private const val TAG = "IosMediaPlayerHandler"
 
@@ -182,17 +190,56 @@ class IosMediaPlayerHandlerImpl(
         }
     }
 
+    private var currentArtwork: MPMediaItemArtwork? = null
+    private var currentArtworkUrl: String? = null
+
+    @OptIn(ExperimentalForeignApi::class)
+    private fun loadArtwork(urlStr: String?) {
+        if (urlStr.isNullOrEmpty()) {
+            currentArtwork = null
+            currentArtworkUrl = null
+            return
+        }
+        if (urlStr == currentArtworkUrl && currentArtwork != null) return
+        currentArtworkUrl = urlStr
+        playerScope.launch(Dispatchers.Default) {
+            runCatching {
+                val nsUrl = NSURL.URLWithString(urlStr) ?: return@runCatching
+                val data = NSData.dataWithContentsOfURL(nsUrl) ?: return@runCatching
+                val image = UIImage.imageWithData(data) ?: return@runCatching
+                val artwork = runCatching {
+                    MPMediaItemArtwork(boundsSize = image.size) { _ -> image }
+                }.getOrElse {
+                    MPMediaItemArtwork(image = image)
+                }
+                withContext(Dispatchers.Main) {
+                    currentArtwork = artwork
+                    val p = avPlayer
+                    val cur = if (p != null) CMTimeGetSeconds(p.currentTime()) else 0.0
+                    val dur = if (p?.currentItem != null) CMTimeGetSeconds(p.currentItem!!.duration()) else 0.0
+                    updateNowPlayingInfo(_nowPlaying.value, if (dur.isNaN()) 0.0 else dur, if (cur.isNaN()) 0.0 else cur)
+                }
+            }
+        }
+    }
+
     private fun updateNowPlayingInfo(item: GenericMediaItem?, durationSeconds: Double, elapsedSeconds: Double) {
         if (item == null) {
             MPNowPlayingInfoCenter.defaultCenter().nowPlayingInfo = null
+            currentArtwork = null
+            currentArtworkUrl = null
             return
         }
         val info = mutableMapOf<Any?, Any?>()
-        info[MPMediaItemPropertyTitle] = item.title
-        info[MPMediaItemPropertyArtist] = item.artist
+        info[MPMediaItemPropertyTitle] = item.metadata.title ?: item.title
+        info[MPMediaItemPropertyArtist] = item.metadata.artist ?: item.artist
+        item.metadata.albumTitle?.let { info[MPMediaItemPropertyAlbumTitle] = it }
         info[MPMediaItemPropertyPlaybackDuration] = durationSeconds
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = elapsedSeconds
         info[MPNowPlayingInfoPropertyPlaybackRate] = if (isPlaying) 1.0 else 0.0
+        currentArtwork?.let {
+            info[MPMediaItemPropertyArtwork] = it
+        }
         MPNowPlayingInfoCenter.defaultCenter().nowPlayingInfo = info
     }
 
@@ -448,6 +495,7 @@ class IosMediaPlayerHandlerImpl(
     private fun loadAndPlayCurrentItem(startPositionMs: Long) {
         val item = currentMediaItem ?: return
         _nowPlaying.value = item
+        loadArtwork(item.metadata.artworkUri)
         _nowPlayingState.update {
             it.copy(
                 title = item.title,

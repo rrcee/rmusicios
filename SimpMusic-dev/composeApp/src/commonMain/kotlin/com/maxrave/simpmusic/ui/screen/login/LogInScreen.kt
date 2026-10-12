@@ -136,7 +136,7 @@ fun LoginScreen(
                 }
             ) { url ->
                 Logger.d("LogInScreen", "Current URL: $url")
-                if (url == Config.YOUTUBE_MUSIC_MAIN_URL) {
+                if (url == Config.YOUTUBE_MUSIC_MAIN_URL || url.startsWith(Config.YOUTUBE_MUSIC_MAIN_URL) || url.startsWith("https://music.youtube.com")) {
                     coroutineScope.launch {
                         val success =
                             createWebViewCookieManager()
