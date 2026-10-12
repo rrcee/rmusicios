@@ -117,7 +117,8 @@ import simpmusic.composeapp.generated.resources.removed_from_youtube_liked
 import simpmusic.composeapp.generated.resources.shared
 import simpmusic.composeapp.generated.resources.updated
 import simpmusic.composeapp.generated.resources.vote_submitted
-import java.io.FileOutputStream
+import okio.FileSystem
+import okio.Path.Companion.toPath
 import kotlin.math.abs
 import kotlin.reflect.KClass
 
@@ -2026,12 +2027,12 @@ class SharedViewModel(
             nowPlayingState.value?.track?.let { track ->
                 val bytesArray = bitmap.toByteArray()
                 try {
-                    val fileOutputStream = FileOutputStream("$path.jpg")
-                    fileOutputStream.write(bytesArray)
-                    fileOutputStream.close()
+                    FileSystem.SYSTEM.write("$path.jpg".toPath()) {
+                        write(bytesArray)
+                    }
                     Logger.d(tag, "Thumbnail saved to $path.jpg")
                 } catch (e: Exception) {
-                    throw RuntimeException(e)
+                    Logger.e(tag, "Failed to save thumbnail: ${e.message}")
                 }
                 songRepository
                     .downloadToFile(

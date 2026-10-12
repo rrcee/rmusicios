@@ -1550,7 +1550,7 @@ fun NowPlayingContentSpotify(
                                         text =
                                             stringResource(
                                                 Res.string.view_count,
-                                                "%,d".format(state.screenData.songInfoData?.viewCount),
+                                                com.maxrave.simpmusic.extension.formatNumberWithCommas(state.screenData.songInfoData?.viewCount),
                                             ),
                                         style = typo().labelMedium,
                                         color = Color.White,

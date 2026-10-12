@@ -3,13 +3,11 @@ package com.maxrave.kotlinytmusicscraper.utils
 import com.maxrave.kotlinytmusicscraper.models.response.AudioData
 import com.maxrave.logger.Logger
 import kotlinx.serialization.json.Json
-import java.security.MessageDigest
-import java.time.Instant
 import kotlin.io.encoding.Base64
 
-fun ByteArray.toHex(): String = joinToString(separator = "") { eachByte -> "%02x".format(eachByte) }
-
-fun sha1(str: String): String = MessageDigest.getInstance("SHA-1").digest(str.toByteArray()).toHex()
+fun ByteArray.toHex(): String = joinToString(separator = "") { eachByte ->
+    (eachByte.toInt() and 0xFF).toString(16).padStart(2, '0')
+}
 
 fun parseCookieString(cookie: String): Map<String, String> =
     cookie
@@ -42,7 +40,7 @@ fun generateNetscapeCookies(
     path: String = "/",
     secure: Boolean = false,
     httpOnly: Boolean = false,
-    expirationTimeSeconds: Long = Instant.now().epochSecond + 86400 * 365,
+    expirationTimeSeconds: Long = 2147483647L,
 ): String {
     val header =
         "# Netscape HTTP Cookie File\n" +

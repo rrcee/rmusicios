@@ -9,8 +9,8 @@ import com.maxrave.simpmusic.utils.VersionManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.number
-import java.io.File
-import java.io.RandomAccessFile
+import okio.FileSystem
+import okio.Path.Companion.toPath
 import kotlin.time.Clock
 import kotlin.time.Instant
 
@@ -63,9 +63,9 @@ internal class LogTail(
 
     /** True when [lines] changed. */
     fun poll(): Boolean {
-        val files = Logger.logFiles(name).map(::File)
+        val files = Logger.logFiles(name).map { it.toPath() }
         val live = files.lastOrNull() ?: return false
-        val size = live.length()
+        val size = FileSystem.SYSTEM.metadataOrNull(live)?.size ?: 0L
         return when {
             // First read, or the live file rolled over and started again from empty.
             liveOffset < 0 || size < liveOffset -> {
@@ -85,13 +85,18 @@ internal class LogTail(
         }
     }
 
-    private fun reload(files: List<File>) {
+    private fun reload(files: List<okio.Path>) {
         nextId = 0
         val text = StringBuilder()
-        files.dropLast(1).filter(File::exists).forEach { text.append(it.readText()) }
-        val (liveText, end) = readCompleteLines(files.last(), 0)
-        text.append(liveText)
-        liveOffset = end
+        files.dropLast(1).filter { FileSystem.SYSTEM.exists(it) }.forEach {
+            text.append(FileSystem.SYSTEM.read(it) { readUtf8() })
+        }
+        val liveFile = files.lastOrNull()
+        if (liveFile != null) {
+            val (liveText, end) = readCompleteLines(liveFile, 0)
+            text.append(liveText)
+            liveOffset = end
+        }
         lines = emptyList()
         append(text.toString())
     }
@@ -112,20 +117,21 @@ internal class LogTail(
 
 /** Everything from [from] to the last complete line, and the offset just past it. */
 private fun readCompleteLines(
-    file: File,
+    path: okio.Path,
     from: Long,
 ): Pair<String, Long> {
-    if (!file.exists()) return "" to 0L
-    RandomAccessFile(file, "r").use { raf ->
-        val length = raf.length()
-        if (length <= from) return "" to from
-        val bytes = ByteArray((length - from).toInt())
-        raf.seek(from)
-        raf.readFully(bytes)
-        val end = bytes.lastIndexOf('\n'.code.toByte())
-        if (end < 0) return "" to from
-        return bytes.decodeToString(0, end + 1) to from + end + 1
+    if (!FileSystem.SYSTEM.exists(path)) return "" to 0L
+    val length = FileSystem.SYSTEM.metadataOrNull(path)?.size ?: 0L
+    if (length <= from) return "" to from
+    val bytesToRead = (length - from).toInt()
+    val bytes = ByteArray(bytesToRead)
+    FileSystem.SYSTEM.read(path) {
+        skip(from)
+        readFully(bytes)
     }
+    val end = bytes.lastIndexOf('\n'.code.toByte())
+    if (end < 0) return "" to from
+    return bytes.decodeToString(0, end + 1) to from + end + 1
 }
 
 private class ParsedLog(
@@ -212,14 +218,16 @@ private fun redactSecrets(text: String): String = SECRETS.fold(text) { acc, (pat
 /** Every log file, oldest first, as one redacted text file handed to [shareImage]. */
 internal suspend fun exportLog(chooserTitle: String): Boolean {
     val bytes =
-        withContext(Dispatchers.IO) {
+        withContext(Dispatchers.Default) {
             runCatching {
                 buildString {
                     appendLine("SimpMusic ${VersionManager.getVersionName()} · ${getPlatform().osName()}")
                     for (name in listOf(Logger.APP_LOG, Logger.ERROR_LOG)) {
                         appendLine()
                         appendLine("===== $name.log =====")
-                        Logger.logFiles(name).map(::File).filter(File::exists).forEach { append(it.readText()) }
+                        Logger.logFiles(name).map { it.toPath() }.filter { FileSystem.SYSTEM.exists(it) }.forEach {
+                            append(FileSystem.SYSTEM.read(it) { readUtf8() })
+                        }
                     }
                 }.let(::redactSecrets).encodeToByteArray()
             }.getOrNull()

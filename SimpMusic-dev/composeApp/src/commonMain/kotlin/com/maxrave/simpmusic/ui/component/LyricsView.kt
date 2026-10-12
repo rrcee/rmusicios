@@ -90,7 +90,6 @@ import com.maxrave.simpmusic.viewModel.SharedViewModel
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
-import java.text.Bidi
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.sqrt
@@ -1078,13 +1077,11 @@ private fun AnimatedWord(
     // Null keeps Classic's DimRichPendingColor untouched.
     pendingColorOverride: Color? = null,
 ) {
-    val wordBidi =
+    val isRtl =
         remember(word, lineDirection) {
-            val fallback =
-                if (lineDirection == LayoutDirection.Rtl) Bidi.DIRECTION_DEFAULT_RIGHT_TO_LEFT else Bidi.DIRECTION_DEFAULT_LEFT_TO_RIGHT
-            Bidi(word, fallback)
+            isRtlWord(word, lineDirection == LayoutDirection.Rtl)
         }
-    val wordDirection = if (wordBidi.baseIsLeftToRight()) TextDirection.Ltr else TextDirection.Rtl
+    val wordDirection = if (isRtl) TextDirection.Rtl else TextDirection.Ltr
     val style =
         typo().headlineLarge.copy(
             fontSize = customFontSize ?: typo().headlineLarge.fontSize,
@@ -1215,7 +1212,7 @@ private fun AnimatedWord(
                 translationY = -eased * EMP_RISE_EM * amount * fontPx
             },
     ) {
-        if (!wordBidi.isLeftToRight) {
+        if (isRtl) {
             // Keep Arabic shaping and combining marks intact, including RTL words in an LTR line.
             ShapedLyricsWord(
                 word = word,

@@ -152,6 +152,7 @@ kotlin {
 
             // DataStore
             implementation(libs.datastore.preferences)
+            implementation(libs.okio)
 
             // Lottie
 

@@ -11,12 +11,20 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.LayoutDirection
-import java.text.Bidi
+
+internal fun isRtlWord(text: String, fallbackRtl: Boolean): Boolean {
+    for (char in text) {
+        val code = char.code
+        if (code in 0x0590..0x08FF || code in 0xFB1D..0xFEFC) return true
+        if (code in 0x0041..0x005A || code in 0x0061..0x007A || code in 0x00C0..0x024F || code in 0x0400..0x052F || code in 0x4E00..0x9FFF || code in 0x3040..0x30FF || code in 0xAC00..0xD7AF) return false
+    }
+    return fallbackRtl
+}
 
 @Composable
 internal fun rememberLyricLayoutDirection(text: String): LayoutDirection =
     remember(text) {
-        if (Bidi(text, Bidi.DIRECTION_DEFAULT_LEFT_TO_RIGHT).baseIsLeftToRight()) LayoutDirection.Ltr else LayoutDirection.Rtl
+        if (isRtlWord(text, false)) LayoutDirection.Rtl else LayoutDirection.Ltr
     }
 
 /**

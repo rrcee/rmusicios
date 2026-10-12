@@ -174,6 +174,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import kotlinx.datetime.format
 import kotlinx.datetime.format.FormatStringsInDatetimeFormats
 import kotlinx.datetime.format.byUnicodePattern
@@ -451,9 +453,17 @@ import simpmusic.composeapp.generated.resources.youtube_account
 import simpmusic.composeapp.generated.resources.youtube_subtitle_language
 import simpmusic.composeapp.generated.resources.youtube_subtitle_language_message
 import simpmusic.composeapp.generated.resources.youtube_transcript
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
+
+@OptIn(FormatStringsInDatetimeFormats::class)
+private val settingsDateTimeDisplayFormat = LocalDateTime.Format {
+    byUnicodePattern("yyyy-MM-dd HH:mm:ss")
+}
+
+private fun formatTimestampToString(millis: Long): String {
+    return kotlinx.datetime.Instant.fromEpochMilliseconds(millis)
+        .toLocalDateTime(TimeZone.currentSystemDefault())
+        .format(settingsDateTimeDisplayFormat)
+}
 
 @OptIn(
     ExperimentalMaterial3Api::class,
@@ -617,10 +627,7 @@ fun SettingScreen(
                 return@derivedStateOf runBlocking {
                     getString(
                         Res.string.last_checked_at,
-                        DateTimeFormatter
-                            .ofPattern("yyyy-MM-dd HH:mm:ss")
-                            .withZone(ZoneId.systemDefault())
-                            .format(Instant.ofEpochMilli(lastCheckLong)),
+                        formatTimestampToString(lastCheckLong),
                     )
                 }
             }
@@ -2655,10 +2662,7 @@ fun SettingScreen(
                                     if (autoBackupLastTime == 0L) {
                                         stringResource(Res.string.never)
                                     } else {
-                                        DateTimeFormatter
-                                            .ofPattern("yyyy-MM-dd HH:mm:ss")
-                                            .withZone(ZoneId.systemDefault())
-                                            .format(Instant.ofEpochMilli(autoBackupLastTime))
+                                        formatTimestampToString(autoBackupLastTime)
                                     },
                             )
                         }
