@@ -311,13 +311,13 @@ class AudioPlayerService: ObservableObject {
         }
 
         guard let playUrl = url else { return }
-        let playerItem = AVPlayerItem(url: playUrl)
+        let item = AVPlayerItem(url: playUrl)
 
-        if player == nil {
-            player = AVPlayer(playerItem = playerItem)
-            setupTimeObserver()
+        if let existingPlayer = self.player {
+            existingPlayer.replaceCurrentItem(with: item)
         } else {
-            player?.replaceCurrentItem(with: playerItem)
+            self.player = AVPlayer(url: playUrl)
+            setupTimeObserver()
         }
 
         player?.play()
@@ -328,7 +328,7 @@ class AudioPlayerService: ObservableObject {
             self,
             selector: #selector(playerDidFinishPlaying),
             name: .AVPlayerItemDidPlayToEndTime,
-            object: playerItem
+            object: item
         )
     }
 
