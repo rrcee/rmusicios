@@ -35,7 +35,7 @@ jobs:
         working-directory: SimpMusic-dev
         run: |
           chmod +x ./gradlew
-          ./gradlew :composeApp:linkReleaseFrameworkIosArm64 --no-configuration-cache --stacktrace
+          ./gradlew :composeApp:linkReleaseFrameworkIosArm64 --no-configuration-cache --stacktrace || (sleep 10 && ./gradlew :composeApp:linkReleaseFrameworkIosArm64 --no-configuration-cache --stacktrace)
           mkdir -p iosApp/Frameworks
           cp -R composeApp/build/bin/iosArm64/releaseFramework/ComposeApp.framework iosApp/Frameworks/
 

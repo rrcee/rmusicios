@@ -14,6 +14,7 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        maven("https://repo1.maven.org/maven2/")
         gradlePluginPortal()
         maven { url = uri("https://jitpack.io") }
         maven("https://jogamp.org/deployment/maven")
