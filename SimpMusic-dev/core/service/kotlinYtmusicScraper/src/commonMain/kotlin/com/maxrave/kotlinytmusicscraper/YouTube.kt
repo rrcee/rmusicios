@@ -2328,7 +2328,7 @@ class YouTube {
                     Logger.d(TAG, "Player Response is null")
                     trySend(DownloadProgress.failed(it.message ?: "Player response is null"))
                 }
-        }.flowOn(Dispatchers.IO)
+        }.flowOn(Dispatchers.Default)
 
     suspend fun is403Url(url: String) = ytMusic.is403Url(url)
 
