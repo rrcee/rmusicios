@@ -65,7 +65,7 @@ kotlin {
         iosTarget.binaries.framework {
             baseName = "ComposeApp"
             isStatic = true
-            linkerOpts.addAll(listOf("-framework", "AVKit", "-framework", "AVFoundation", "-framework", "MediaPlayer", "-framework", "WebKit", "-framework", "UIKit"))
+            linkerOpts.addAll(listOf("-framework", "AVKit", "-framework", "AVFoundation", "-framework", "MediaPlayer", "-framework", "WebKit", "-framework", "UIKit", "-lsqlite3"))
         }
     }
 
