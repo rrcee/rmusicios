@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalForeignApi::class)
+
 package com.maxrave.data.mediaservice
 
 import com.maxrave.domain.data.entities.NewFormatEntity
@@ -38,6 +40,7 @@ import com.maxrave.logger.Logger
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
@@ -49,56 +52,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import platform.AVFAudio.AVAudioSession
-import platform.AVFAudio.AVAudioSessionCategoryPlayback
-import platform.AVFAudio.AVAudioSessionInterruptionNotification
-import platform.AVFAudio.AVAudioSessionInterruptionOptionKey
-import platform.AVFAudio.AVAudioSessionInterruptionOptionShouldResume
-import platform.AVFAudio.AVAudioSessionInterruptionTypeBegan
-import platform.AVFAudio.AVAudioSessionInterruptionTypeEnded
-import platform.AVFAudio.AVAudioSessionInterruptionTypeKey
-import platform.AVFAudio.AVAudioSessionPortAirPlay
-import platform.AVFAudio.AVAudioSessionPortBluetoothA2DP
-import platform.AVFAudio.AVAudioSessionPortBluetoothHFP
-import platform.AVFAudio.AVAudioSessionPortBluetoothLE
-import platform.AVFAudio.AVAudioSessionPortDescription
-import platform.AVFAudio.AVAudioSessionPortHeadphones
-import platform.AVFAudio.AVAudioSessionRouteChangeNotification
-import platform.AVFAudio.AVAudioSessionRouteChangeReasonKey
-import platform.AVFAudio.AVAudioSessionRouteChangeReasonOldDeviceUnavailable
-import platform.AVFAudio.setActive
-import platform.AVFoundation.AVPlayer
-import platform.AVFoundation.AVPlayerItem
-import platform.AVFoundation.AVPlayerItemDidPlayToEndTimeNotification
-import platform.AVFoundation.AVPlayerItemStatusReadyToPlay
-import platform.AVFoundation.AVPlayerTimeControlStatusPaused
-import platform.AVFoundation.AVPlayerTimeControlStatusPlaying
-import platform.AVFoundation.currentTime
-import platform.AVFoundation.duration
-import platform.AVFoundation.pause
-import platform.AVFoundation.play
-import platform.AVFoundation.seekToTime
-import platform.CoreMedia.CMTimeGetSeconds
-import platform.CoreMedia.CMTimeMakeWithSeconds
-import platform.Foundation.NSData
-import platform.Foundation.NSNotificationCenter
-import platform.Foundation.NSNumber
-import platform.Foundation.NSOperationQueue
-import platform.Foundation.NSURL
-import platform.Foundation.dataWithContentsOfURL
-import platform.MediaPlayer.MPChangePlaybackPositionCommandEvent
-import platform.MediaPlayer.MPMediaItemArtwork
-import platform.MediaPlayer.MPMediaItemPropertyAlbumTitle
-import platform.MediaPlayer.MPMediaItemPropertyArtist
-import platform.MediaPlayer.MPMediaItemPropertyArtwork
-import platform.MediaPlayer.MPMediaItemPropertyPlaybackDuration
-import platform.MediaPlayer.MPMediaItemPropertyTitle
-import platform.MediaPlayer.MPNowPlayingInfoCenter
-import platform.MediaPlayer.MPNowPlayingInfoPropertyElapsedPlaybackTime
-import platform.MediaPlayer.MPNowPlayingInfoPropertyPlaybackRate
-import platform.MediaPlayer.MPRemoteCommandCenter
-import platform.MediaPlayer.MPRemoteCommandHandlerStatusSuccess
-import platform.UIKit.UIImage
+import platform.AVFAudio.*
+import platform.AVFoundation.*
+import platform.CoreMedia.*
+import platform.Foundation.*
+import platform.MediaPlayer.*
+import platform.UIKit.*
 
 private const val TAG = "IosMediaPlayerHandler"
 
@@ -125,7 +84,7 @@ class IosMediaPlayerHandlerImpl(
     private var wasPlayingBeforeInterruption = false
 
     // State flows
-    private val _simpleMediaState = MutableStateFlow(SimpleMediaState())
+    private val _simpleMediaState = MutableStateFlow<SimpleMediaState>(SimpleMediaState.Initial)
     override val simpleMediaState: StateFlow<SimpleMediaState> = _simpleMediaState.asStateFlow()
 
     private val _nowPlaying = MutableStateFlow<GenericMediaItem?>(null)
@@ -172,7 +131,7 @@ class IosMediaPlayerHandlerImpl(
     override val castState: StateFlow<GenericCastState> = _castState.asStateFlow()
 
     private val _audioOutputs = MutableStateFlow<List<AudioOutput>>(
-        listOf(AudioOutput("Default", AudioOutputKind.SPEAKER, true)),
+        listOf(AudioOutput(id = "default", name = "Speaker", kind = AudioOutputKind.DEVICE_SPEAKER, isActive = true)),
     )
     override val audioOutputs: StateFlow<List<AudioOutput>> = _audioOutputs.asStateFlow()
 
@@ -222,9 +181,19 @@ class IosMediaPlayerHandlerImpl(
     override var albumTrackIds: Set<String> = emptySet()
     override var skipSilenceEnabled: Boolean = false
 
-    override val bufferedPosition: Long get() = _simpleMediaState.value.progress
+    private val currentProgressMs: Long
+        get() = (_simpleMediaState.value as? SimpleMediaState.Progress)?.progress ?: 0L
+
+    private val currentDurationMs: Long
+        get() {
+            val p = avPlayer ?: return 0L
+            val durSec = CMTimeGetSeconds(p.currentItem?.duration() ?: p.currentTime())
+            return if (!durSec.isNaN() && durSec > 0) (durSec * 1000).toLong() else 0L
+        }
+
+    override val bufferedPosition: Long get() = currentProgressMs
     override val bufferedPercentage: Int get() = 100
-    override val contentPosition: Long get() = _simpleMediaState.value.progress
+    override val contentPosition: Long get() = currentProgressMs
     override val playbackState: Int
         get() = if (isPlaying) 3 else 2 // 3 = READY, 2 = BUFFERING/PAUSED
 
@@ -369,8 +338,8 @@ class IosMediaPlayerHandlerImpl(
             return
         }
         val info = mutableMapOf<Any?, Any?>()
-        info[MPMediaItemPropertyTitle] = item.metadata.title ?: item.title
-        info[MPMediaItemPropertyArtist] = item.metadata.artist ?: item.artist
+        item.metadata.title?.let { info[MPMediaItemPropertyTitle] = it }
+        item.metadata.artist?.let { info[MPMediaItemPropertyArtist] = it }
         item.metadata.albumTitle?.let { info[MPMediaItemPropertyAlbumTitle] = it }
         info[MPMediaItemPropertyPlaybackDuration] = durationSeconds
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = elapsedSeconds
@@ -394,12 +363,7 @@ class IosMediaPlayerHandlerImpl(
                     val posMs = (currentTimeSec * 1000).toLong()
                     val durMs = if (!durationSec.isNaN() && durationSec > 0) (durationSec * 1000).toLong() else 0L
 
-                    _simpleMediaState.update {
-                        it.copy(
-                            progress = posMs,
-                            duration = durMs,
-                        )
-                    }
+                    _simpleMediaState.value = SimpleMediaState.Progress(posMs)
 
                     if (durMs > 1000 && posMs >= durMs - 300 && isPlaying) {
                         onTrackEnded()
@@ -470,7 +434,7 @@ class IosMediaPlayerHandlerImpl(
         val seconds = positionMs / 1000.0
         val cmTime = CMTimeMakeWithSeconds(seconds, 600)
         avPlayer?.seekToTime(cmTime)
-        _simpleMediaState.update { it.copy(progress = positionMs) }
+        _simpleMediaState.value = SimpleMediaState.Progress(positionMs)
         listeners.forEach { it.onPositionDiscontinuity(positionMs) }
     }
 
@@ -482,13 +446,13 @@ class IosMediaPlayerHandlerImpl(
     }
 
     override fun seekBack() {
-        val current = _simpleMediaState.value.progress
+        val current = currentProgressMs
         seekTo((current - 10000).coerceAtLeast(0L))
     }
 
     override fun seekForward() {
-        val current = _simpleMediaState.value.progress
-        val duration = _simpleMediaState.value.duration
+        val current = currentProgressMs
+        val duration = currentDurationMs
         seekTo((current + 10000).coerceAtMost(duration))
     }
 
@@ -501,7 +465,7 @@ class IosMediaPlayerHandlerImpl(
     }
 
     override fun seekToPrevious() {
-        if (_simpleMediaState.value.progress > 3000) {
+        if (currentProgressMs > 3000) {
             seekTo(0L)
             return
         }
@@ -599,10 +563,10 @@ class IosMediaPlayerHandlerImpl(
         get() = avPlayer?.timeControlStatus == AVPlayerTimeControlStatusPlaying
 
     override val currentPosition: Long
-        get() = _simpleMediaState.value.progress
+        get() = currentProgressMs
 
     override val duration: Long
-        get() = _simpleMediaState.value.duration
+        get() = currentDurationMs
 
     override val currentMediaItemIndex: Int
         get() = _currentSongIndex.value
@@ -667,18 +631,17 @@ class IosMediaPlayerHandlerImpl(
                 val portDesc = currentOutputs.objectAtIndex(i.toULong()) as? AVAudioSessionPortDescription
                 if (portDesc != null) {
                     val kind = when (portDesc.portType) {
-                        AVAudioSessionPortHeadphones,
+                        AVAudioSessionPortHeadphones -> AudioOutputKind.WIRED
                         AVAudioSessionPortBluetoothHFP,
                         AVAudioSessionPortBluetoothA2DP,
-                        AVAudioSessionPortBluetoothLE -> AudioOutputKind.HEADPHONES
-                        AVAudioSessionPortAirPlay -> AudioOutputKind.CAST
-                        else -> AudioOutputKind.SPEAKER
+                        AVAudioSessionPortBluetoothLE -> AudioOutputKind.BLUETOOTH
+                        else -> AudioOutputKind.DEVICE_SPEAKER
                     }
-                    list.add(AudioOutput(id = portDesc.UID, kind = kind, isActive = true))
+                    list.add(AudioOutput(id = portDesc.UID, name = portDesc.portName, kind = kind, isActive = true))
                 }
             }
             if (list.isEmpty()) {
-                list.add(AudioOutput("Default", AudioOutputKind.SPEAKER, true))
+                list.add(AudioOutput(id = "default", name = "Speaker", kind = AudioOutputKind.DEVICE_SPEAKER, isActive = true))
             }
             _audioOutputs.value = list
         }
@@ -805,7 +768,7 @@ class IosMediaPlayerHandlerImpl(
             }
             PlayerEvent.ToggleLike -> toggleLike()
             is PlayerEvent.UpdateVolume -> setVolume(playerEvent.newVolume)
-            is PlayerEvent.UpdateProgress -> seekTo((playerEvent.newProgress * _simpleMediaState.value.duration).toLong())
+            is PlayerEvent.UpdateProgress -> seekTo((playerEvent.newProgress * currentDurationMs).toLong())
         }
     }
 
@@ -998,9 +961,9 @@ class IosMediaPlayerHandlerImpl(
         }
     }
 
-    override fun getPlayerDuration(): Long = _simpleMediaState.value.duration
+    override fun getPlayerDuration(): Long = currentDurationMs
 
-    override fun getProgress(): Long = _simpleMediaState.value.progress
+    override fun getProgress(): Long = currentProgressMs
 
     override fun startProgressUpdate() {
         startProgressMonitoring()

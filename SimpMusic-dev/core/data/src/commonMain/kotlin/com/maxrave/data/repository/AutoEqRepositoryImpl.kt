@@ -8,6 +8,7 @@ import com.maxrave.domain.data.model.autoeq.AutoEqCurve
 import com.maxrave.domain.repository.AutoEqRepository
 import com.maxrave.logger.Logger
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.withContext
 import org.simpmusic.autoeq.AutoEq
 import org.simpmusic.autoeq.AutoEqIndexResult
