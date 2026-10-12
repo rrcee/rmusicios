@@ -84,3 +84,13 @@ actual fun changeLanguageNative(code: String) {
     NSUserDefaults.standardUserDefaults.setObject(listOf(code), forKey = "AppleLanguages")
     NSUserDefaults.standardUserDefaults.synchronize()
 }
+
+actual fun setAppIconNative(iconKey: String?) {
+    if (platform.UIKit.UIApplication.sharedApplication.supportsAlternateIcons) {
+        val iconName = if (iconKey == "default" || iconKey.isNullOrEmpty()) null else iconKey
+        platform.UIKit.UIApplication.sharedApplication.setAlternateIconName(iconName, completionHandler = null)
+    }
+}
+
+actual fun getAppIconNative(): String =
+    platform.UIKit.UIApplication.sharedApplication.alternateIconName ?: "default"

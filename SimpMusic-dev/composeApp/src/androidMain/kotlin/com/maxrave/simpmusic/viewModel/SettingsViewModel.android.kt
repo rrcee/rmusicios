@@ -344,3 +344,7 @@ actual fun changeLanguageNative(code: String) {
         e.printStackTrace()
     }
 }
+
+actual fun setAppIconNative(iconKey: String?) {}
+
+actual fun getAppIconNative(): String = "default"

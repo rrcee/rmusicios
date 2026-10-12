@@ -128,6 +128,16 @@ class SettingsViewModel(
     val thumbCacheSize: StateFlow<Long?> = _thumbCacheSize
     private var _canvasCacheSize: MutableStateFlow<Long?> = MutableStateFlow(null)
     val canvasCacheSize: StateFlow<Long?> = _canvasCacheSize
+    private var _appIcon = MutableStateFlow<String>(getAppIconNative())
+    val appIcon: StateFlow<String> = _appIcon.asStateFlow()
+
+    fun setAppIcon(iconKey: String) {
+        viewModelScope.launch {
+            setAppIconNative(iconKey)
+            _appIcon.value = iconKey
+        }
+    }
+
     private var _usingProxy = MutableStateFlow(false)
     val usingProxy: StateFlow<Boolean> = _usingProxy
     private var _proxyType = MutableStateFlow(DataStoreManager.ProxyType.PROXY_TYPE_HTTP)
@@ -2147,6 +2157,10 @@ expect fun getPackageName(): String
 expect fun getFileDir(): String
 
 expect fun changeLanguageNative(code: String)
+
+expect fun setAppIconNative(iconKey: String?)
+
+expect fun getAppIconNative(): String
 
 /** Number of equalizer bands, matching the ISO centres the desktop backend installs. */
 const val EQUALIZER_BAND_COUNT = 10

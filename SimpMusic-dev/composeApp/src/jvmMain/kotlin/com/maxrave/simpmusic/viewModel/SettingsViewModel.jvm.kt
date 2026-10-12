@@ -115,3 +115,7 @@ actual fun changeLanguageNative(code: String) {
         ),
     )
 }
+
+actual fun setAppIconNative(iconKey: String?) {}
+
+actual fun getAppIconNative(): String = "default"

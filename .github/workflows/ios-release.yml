@@ -67,6 +67,7 @@ jobs:
           cp iosApp/SimpMusic/Assets.xcassets/AppIcon.appiconset/icon_120.png build/Payload/SimpMusic.app/AppIcon60x60@2x.png || true
           cp iosApp/SimpMusic/Assets.xcassets/AppIcon.appiconset/icon_180.png build/Payload/SimpMusic.app/AppIcon60x60@3x.png || true
           cp iosApp/SimpMusic/Assets.xcassets/AppIcon.appiconset/icon_1024.png build/Payload/SimpMusic.app/AppIcon.png || true
+          cp iosApp/SimpMusic/AppIcon-*.png build/Payload/SimpMusic.app/ || true
           cd build
           zip -r r-music.ipa Payload
           echo "IPA created successfully at build/r-music.ipa"

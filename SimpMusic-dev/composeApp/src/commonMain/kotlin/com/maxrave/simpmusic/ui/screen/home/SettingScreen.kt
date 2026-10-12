@@ -6,11 +6,18 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.MarqueeAnimationMode
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import org.jetbrains.compose.resources.painterResource
+import simpmusic.composeapp.generated.resources.app_icon_classic
+import simpmusic.composeapp.generated.resources.app_icon_dark
+import simpmusic.composeapp.generated.resources.app_icon_glass
+import simpmusic.composeapp.generated.resources.app_icon_neon
+import simpmusic.composeapp.generated.resources.app_icon_red
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -628,6 +635,9 @@ fun SettingScreen(
     var showThirdPartyLibraries by rememberSaveable {
         mutableStateOf(false)
     }
+    var showAppIconDialog by rememberSaveable {
+        mutableStateOf(false)
+    }
 
     LaunchedEffect(true) {
         viewModel.getAllGoogleAccount()
@@ -947,6 +957,19 @@ fun SettingScreen(
                             isEnable = true,
                         )
                     }
+                    val currentAppIcon by viewModel.appIcon.collectAsStateWithLifecycle()
+                    SettingItem(
+                        title = "App Icon",
+                        subtitle = when (currentAppIcon) {
+                            "AppIcon-Classic" -> "Classic Cyan"
+                            "AppIcon-Red" -> "Apple Music Red"
+                            "AppIcon-Dark" -> "Stealth Titanium"
+                            "AppIcon-Neon" -> "Cyberpunk Neon"
+                            else -> "Liquid Glass"
+                        },
+                        smallSubtitle = true,
+                        onClick = { showAppIconDialog = true },
+                    )
                 }
             }
         }
@@ -2899,6 +2922,72 @@ fun SettingScreen(
             dismissButton = {
                 TextButton(onClick = { showColorPickerDialog = false }) {
                     Text(text = stringResource(Res.string.cancel))
+                }
+            },
+        )
+    }
+    if (showAppIconDialog) {
+        val currentAppIcon by viewModel.appIcon.collectAsStateWithLifecycle()
+        val iconOptions = listOf(
+            Triple("default", "Liquid Glass (r/music)", Res.drawable.app_icon_glass),
+            Triple("AppIcon-Classic", "Classic Cyan (SimpMusic)", Res.drawable.app_icon_classic),
+            Triple("AppIcon-Red", "Apple Music Red", Res.drawable.app_icon_red),
+            Triple("AppIcon-Dark", "Stealth Titanium", Res.drawable.app_icon_dark),
+            Triple("AppIcon-Neon", "Cyberpunk Neon", Res.drawable.app_icon_neon),
+        )
+        AlertDialog(
+            onDismissRequest = { showAppIconDialog = false },
+            title = {
+                Text(
+                    text = "Choose App Icon",
+                    style = typo().titleSmall,
+                )
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.padding(top = 4.dp),
+                ) {
+                    iconOptions.forEach { (key, name, drawable) ->
+                        val isSelected = (currentAppIcon == key) || (key == "default" && (currentAppIcon.isEmpty() || currentAppIcon == "default"))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable {
+                                    viewModel.setAppIcon(key)
+                                    showAppIconDialog = false
+                                }
+                                .padding(vertical = 4.dp, horizontal = 6.dp),
+                        ) {
+                            Image(
+                                painter = painterResource(drawable),
+                                contentDescription = name,
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(RoundedCornerShape(12.dp)),
+                            )
+                            Text(
+                                text = name,
+                                style = typo().bodyMedium,
+                                modifier = Modifier.weight(1f),
+                            )
+                            RadioButton(
+                                selected = isSelected,
+                                onClick = {
+                                    viewModel.setAppIcon(key)
+                                    showAppIconDialog = false
+                                },
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAppIconDialog = false }) {
+                    Text(stringResource(Res.string.cancel))
                 }
             },
         )
