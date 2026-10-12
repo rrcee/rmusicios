@@ -38,7 +38,6 @@ kotlin {
             dependencies {
                 implementation(libs.kotlin.stdlib)
                 // Add KMP dependencies here
-                api(libs.kotlinx.coroutines.core)
                 implementation(libs.room.runtime)
                 implementation(libs.kotlinx.serialization.json)
                 implementation(projects.common)
