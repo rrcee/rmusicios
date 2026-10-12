@@ -60,7 +60,6 @@ kotlin {
     listOf(
         iosArm64(),
         iosSimulatorArm64(),
-        iosX64(),
     ).forEach { iosTarget ->
         iosTarget.binaries.framework {
             baseName = "ComposeApp"
@@ -107,6 +106,7 @@ kotlin {
             implementation(libs.camera.lifecycle)
             implementation(libs.camera.view)
             implementation(libs.zxing.core)
+            api(libs.coil.network.okhttp)
         }
         commonMain.dependencies {
             implementation(libs.runtime)
@@ -121,8 +121,6 @@ kotlin {
             // Compose
             implementation(libs.compose.material3.adaptive)
             implementation(libs.compose.material.ripple)
-
-            implementation(libs.ui.tooling.preview)
 
             // Other module
             api(projects.common)
@@ -146,7 +144,7 @@ kotlin {
 
             // Coil
             api(libs.coil.compose)
-            api(libs.coil.network.okhttp)
+            api(libs.coil.network.ktor3)
             api(libs.kmpalette.core)
             api(libs.kmpalette.network)
             implementation(libs.materialkolor)
@@ -199,6 +197,10 @@ kotlin {
             implementation(projects.mediaJvmUi)
             // Login sync QR code
             implementation(libs.zxing.core)
+            api(libs.coil.network.okhttp)
+        }
+        iosMain.dependencies {
+            implementation(libs.ktor.client.darwin)
         }
     }
 }
