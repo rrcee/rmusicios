@@ -174,6 +174,8 @@ val viewModelModule =
         viewModel {
             NotificationViewModel(
                 get(),
+                get(),
+                get(),
             )
         }
         viewModel {

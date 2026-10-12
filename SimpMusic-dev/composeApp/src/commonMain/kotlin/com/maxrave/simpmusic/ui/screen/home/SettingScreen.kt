@@ -938,13 +938,13 @@ fun SettingScreen(
                             onClick = { showColorPickerDialog = true },
                         )
                     }
-                    if (getPlatform() == Platform.Android) {
+                    if (getPlatform() == Platform.Android || getPlatform() == Platform.iOS) {
                         SettingItem(
                             title = stringResource(Res.string.enable_liquid_glass_effect),
                             subtitle = stringResource(Res.string.enable_liquid_glass_effect_description),
                             smallSubtitle = true,
                             switch = (enableLiquidGlass to { viewModel.setEnableLiquidGlass(it) }),
-                            isEnable = getPlatform() == Platform.Android,
+                            isEnable = true,
                         )
                     }
                 }
@@ -1366,7 +1366,7 @@ fun SettingScreen(
                 }
             }
         }
-        if (getPlatform() == Platform.Android) {
+        if (getPlatform() == Platform.Android || getPlatform() == Platform.iOS) {
             item(key = "audio") {
                 SettingGroup(title = stringResource(Res.string.audio)) {
                     SettingItem(
@@ -2199,7 +2199,7 @@ fun SettingScreen(
                 )
             }
         }
-        if (getPlatform() == Platform.Android) {
+        if (getPlatform() == Platform.Android || getPlatform() == Platform.iOS) {
             item(key = "storage") {
                 SettingGroup(title = stringResource(Res.string.storage)) {
                     SettingItem(

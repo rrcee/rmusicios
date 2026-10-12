@@ -263,7 +263,7 @@ class SettingsViewModel(
         getHelpBuildLyricsDatabase()
         viewModelScope.launch {
             enableLiquidGlass.collect {
-                if (getPlatform() != Platform.Android && it) {
+                if (getPlatform() != Platform.Android && getPlatform() != Platform.iOS && it) {
                     setEnableLiquidGlass(false)
                 }
             }
