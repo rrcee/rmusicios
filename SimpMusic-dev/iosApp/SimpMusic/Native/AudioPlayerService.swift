@@ -11,17 +11,53 @@ struct AudioTrack: Identifiable, Equatable, Codable {
     let artworkUrl: String
     let streamUrl: String
     let duration: Double
-    var localFilePath: String? = nil
-    var isDownloaded: Bool = false
+    var localFilePath: String?
+    var isDownloaded: Bool
+
+    init(
+        id: String,
+        title: String,
+        artist: String,
+        artworkUrl: String,
+        streamUrl: String = "",
+        duration: Double = 0,
+        localFilePath: String? = nil,
+        isDownloaded: Bool = false
+    ) {
+        self.id = id
+        self.title = title
+        self.artist = artist
+        self.artworkUrl = artworkUrl
+        self.streamUrl = streamUrl
+        self.duration = duration
+        self.localFilePath = localFilePath
+        self.isDownloaded = isDownloaded
+    }
 }
 
 struct LocalPlaylist: Identifiable, Equatable, Codable {
-    var id: String = UUID().uuidString
+    var id: String
     var title: String
-    var description: String = ""
-    var coverArtworkUrl: String? = nil
-    var trackIds: [String] = []
-    var createdAt: Date = Date()
+    var description: String
+    var coverArtworkUrl: String?
+    var trackIds: [String]
+    var createdAt: Date
+
+    init(
+        id: String = UUID().uuidString,
+        title: String,
+        description: String = "",
+        coverArtworkUrl: String? = nil,
+        trackIds: [String] = [],
+        createdAt: Date = Date()
+    ) {
+        self.id = id
+        self.title = title
+        self.description = description
+        self.coverArtworkUrl = coverArtworkUrl
+        self.trackIds = trackIds
+        self.createdAt = createdAt
+    }
 }
 
 // MARK: - Download & Storage Manager
@@ -225,20 +261,20 @@ class LocalStorageManager: ObservableObject {
         }
         try? manifestText.write(to: playlistManifest, atomically: true, encoding: .utf8)
 
-        // 3. Create zip archive
+        // 3. Return folder or zip archive URL
         let zipUrl = tempDir.appendingPathComponent("r-music-downloaded-songs.zip")
         try? FileManager.default.removeItem(at: zipUrl)
 
-        var error: NSError?
+        var coordError: NSError?
         let coordinator = NSFileCoordinator()
-        var zipSuccess = false
+        var exportedUrl: URL = exportDir
 
-        coordinator.coordinate(readingItemAt: exportDir, options: .forUploading, error: &error) { zippedArchiveUrl in
+        coordinator.coordinate(readingItemAt: exportDir, options: [.forUploading], error: &coordError) { zippedArchiveUrl in
             try? FileManager.default.copyItem(at: zippedArchiveUrl, to: zipUrl)
-            zipSuccess = true
+            exportedUrl = zipUrl
         }
 
-        return zipSuccess ? zipUrl : nil
+        return FileManager.default.fileExists(atPath: zipUrl.path) ? zipUrl : exportedUrl
     }
 }
 
