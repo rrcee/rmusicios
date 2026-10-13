@@ -36,19 +36,19 @@ jobs:
         run: |
           chmod +x ./gradlew
           export GRADLE_OPTS="-Xmx8192m -XX:+UseParallelGC"
-          ./gradlew :composeApp:linkReleaseFrameworkIosArm64 \
+          ./gradlew :composeApp:linkDebugFrameworkIosArm64 \
             -Dorg.gradle.jvmargs="-Xmx8192m -XX:+UseParallelGC" \
             -Pkotlin.native.jvmArgs="-Xmx8192m" \
             --no-configuration-cache --stacktrace
           mkdir -p iosApp/Frameworks
-          cp -R composeApp/build/bin/iosArm64/releaseFramework/ComposeApp.framework iosApp/Frameworks/
+          cp -R composeApp/build/bin/iosArm64/debugFramework/ComposeApp.framework iosApp/Frameworks/
 
       - name: Build iOS Application Archive
         working-directory: SimpMusic-dev
         run: |
           cd iosApp
           set -o pipefail
-          FRAMEWORK_DIR="$(pwd)/../composeApp/build/bin/iosArm64/releaseFramework"
+          FRAMEWORK_DIR="$(pwd)/../composeApp/build/bin/iosArm64/debugFramework"
           xcodebuild archive \
             -project SimpMusic.xcodeproj \
             -scheme SimpMusic \
