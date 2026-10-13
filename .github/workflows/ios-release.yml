@@ -67,10 +67,13 @@ jobs:
         run: |
           mkdir -p build/Payload
           cp -R build/SimpMusic.xcarchive/Products/Applications/SimpMusic.app build/Payload/
-          mkdir -p build/Payload/SimpMusic.app/compose-resources
-          if [ -d "composeApp/build/generated/compose/resourceGenerator/preparedResources/commonMain/composeResources" ]; then
-            cp -R composeApp/build/generated/compose/resourceGenerator/preparedResources/commonMain/composeResources/* build/Payload/SimpMusic.app/compose-resources/
-            cp -R composeApp/build/generated/compose/resourceGenerator/preparedResources/commonMain/composeResources/* build/Payload/SimpMusic.app/
+          RES_SRC="composeApp/build/generated/compose/resourceGenerator/preparedResources/commonMain/composeResources"
+          mkdir -p build/Payload/SimpMusic.app/compose-resources/composeResources/simpmusic.composeapp.generated.resources
+          mkdir -p build/Payload/SimpMusic.app/composeResources/simpmusic.composeapp.generated.resources
+          if [ -d "$RES_SRC" ]; then
+            cp -R "$RES_SRC"/* build/Payload/SimpMusic.app/compose-resources/composeResources/simpmusic.composeapp.generated.resources/
+            cp -R "$RES_SRC"/* build/Payload/SimpMusic.app/composeResources/simpmusic.composeapp.generated.resources/
+            cp -R "$RES_SRC"/* build/Payload/SimpMusic.app/compose-resources/
           fi
           cp iosApp/SimpMusic/Assets.xcassets/AppIcon.appiconset/icon_1024.png build/Payload/SimpMusic.app/iTunesArtwork@2x.png || true
           cp iosApp/SimpMusic/Assets.xcassets/AppIcon.appiconset/icon_120.png build/Payload/SimpMusic.app/AppIcon60x60@2x.png || true
