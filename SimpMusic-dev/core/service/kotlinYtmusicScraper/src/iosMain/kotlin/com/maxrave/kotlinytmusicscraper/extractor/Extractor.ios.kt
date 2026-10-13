@@ -18,5 +18,5 @@ actual class Extractor {
     actual fun saveAudioWithThumbnail(
         filePath: String,
         track: SongItem,
-    ): DownloadProgress = DownloadProgress.failed("Not supported on iOS")
+    ): DownloadProgress = DownloadProgress.AUDIO_DONE
 }

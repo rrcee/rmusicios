@@ -6,5 +6,8 @@ import io.ktor.util.ContentEncoder
 expect fun createBrotliEncoder(): ContentEncoder
 
 fun ContentEncodingConfig.brotli(quality: Float? = null) {
-    customEncoder(createBrotliEncoder(), quality)
+    val encoder = createBrotliEncoder()
+    if (encoder.name.isNotEmpty()) {
+        customEncoder(encoder, quality)
+    }
 }

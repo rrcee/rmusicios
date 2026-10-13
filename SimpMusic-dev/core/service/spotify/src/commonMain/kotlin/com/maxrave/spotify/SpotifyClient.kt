@@ -207,7 +207,7 @@ class SpotifyClient {
         header(
             HttpHeaders
                 .AcceptEncoding,
-            "gzip, deflate, br",
+            "gzip, deflate",
         )
         val variable =
             "{\"searchTerm\":\"${q}\",\"offset\":0,\"limit\":3,\"numberOfTopResults\":3,\"includeAudiobooks\":true,\"includePreReleases\":false}"
@@ -235,7 +235,7 @@ class SpotifyClient {
             append(
                 HttpHeaders
                     .AcceptEncoding,
-                "gzip, deflate, br",
+                "gzip, deflate",
             )
             append(HttpHeaders.Authorization, "Bearer $token")
             append("Client-Token", clientToken)
@@ -258,7 +258,7 @@ class SpotifyClient {
             headers {
                 append(HttpHeaders.Accept, "application/json")
                 append(HttpHeaders.ContentType, "application/json")
-                append(HttpHeaders.AcceptEncoding, "gzip, deflate, br")
+                append(HttpHeaders.AcceptEncoding, "gzip, deflate")
                 append(
                     HttpHeaders.UserAgent,
                     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36 Edg/135.0.0.0",

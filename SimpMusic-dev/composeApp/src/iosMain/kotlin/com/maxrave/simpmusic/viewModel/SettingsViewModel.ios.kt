@@ -137,6 +137,19 @@ actual fun changeLanguageNative(code: String) {
     NSUserDefaults.standardUserDefaults.synchronize()
 }
 
-actual fun setAppIconNative(iconKey: String?) {}
+actual fun setAppIconNative(iconKey: String?) {
+    platform.darwin.dispatch_async(platform.darwin.dispatch_get_main_queue()) {
+        runCatching {
+            val app = UIApplication.sharedApplication
+            if (app.supportsAlternateIcons) {
+                val target = if (iconKey.isNullOrEmpty() || iconKey == "default") null else iconKey
+                app.setAlternateIconName(target) { _ -> }
+            }
+        }
+    }
+}
 
-actual fun getAppIconNative(): String = "default"
+actual fun getAppIconNative(): String =
+    runCatching {
+        UIApplication.sharedApplication.alternateIconName ?: "default"
+    }.getOrDefault("default")

@@ -22,7 +22,7 @@ fun documentDirectory(): String {
         directory = NSDocumentDirectory,
         inDomain = NSUserDomainMask,
         appropriateForURL = null,
-        create = false,
+        create = true,
         error = null,
     )
     return requireNotNull(documentDirectory?.path)

@@ -263,8 +263,11 @@ class IosMediaPlayerHandlerImpl(
                 name = AVPlayerItemDidPlayToEndTimeNotification,
                 `object` = null,
                 queue = NSOperationQueue.mainQueue,
-            ) { _ ->
-                onTrackEnded()
+            ) { notification ->
+                val finishedItem = notification?.`object` as? AVPlayerItem
+                if (finishedItem != null && finishedItem == avPlayer?.currentItem) {
+                    onTrackEnded()
+                }
             }
         }.onFailure {
             Logger.e(TAG, "Failed to register audio observers: ${it.message}")

@@ -7,30 +7,22 @@ import kotlin.coroutines.CoroutineContext
 
 object BrotliEncoder : ContentEncoder {
     override val name: String
-        get() = "br"
+        get() = ""
 
     override fun encode(
         source: ByteReadChannel,
         coroutineContext: CoroutineContext,
-    ): ByteReadChannel {
-        TODO("Not yet implemented")
-    }
+    ): ByteReadChannel = source
 
     override fun encode(
         source: ByteWriteChannel,
         coroutineContext: CoroutineContext,
-    ): ByteWriteChannel {
-        TODO("Not yet implemented")
-    }
+    ): ByteWriteChannel = source
 
     override fun decode(
         source: ByteReadChannel,
         coroutineContext: CoroutineContext,
-    ): ByteReadChannel {
-        TODO("Not yet implemented")
-    }
+    ): ByteReadChannel = source
 }
 
-actual fun createBrotliEncoder(): ContentEncoder {
-    TODO("Not yet implemented")
-}
+actual fun createBrotliEncoder(): ContentEncoder = BrotliEncoder

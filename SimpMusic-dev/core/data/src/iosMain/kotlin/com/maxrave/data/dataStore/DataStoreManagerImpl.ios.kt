@@ -17,7 +17,7 @@ producePath = {
         directory = NSDocumentDirectory,
         inDomain = NSUserDomainMask,
         appropriateForURL = null,
-        create = false,
+        create = true,
         error = null,
     )
     requireNotNull(documentDirectory).path + "/$SETTINGS_FILENAME.preferences_pb"

@@ -98,8 +98,9 @@ actual fun PlatformWebView(
                     }
                 )
                 webView.navigationDelegate = delegate
-                val request = NSURLRequest(uRL = NSURL.URLWithString(initUrl)!!)
-                webView.loadRequest(request)
+                NSURL.URLWithString(initUrl)?.let { nsUrl ->
+                    webView.loadRequest(NSURLRequest(uRL = nsUrl))
+                }
                 webView
             }
         )

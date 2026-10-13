@@ -12,11 +12,27 @@ import androidx.compose.ui.interop.UIKitView
 import androidx.compose.ui.text.TextStyle
 import com.maxrave.domain.data.model.metadata.Lyrics
 import com.maxrave.domain.data.model.streams.TimeLine
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
+import platform.AVFoundation.AVLayerVideoGravityResizeAspect
+import platform.AVFoundation.AVLayerVideoGravityResizeAspectFill
 import platform.AVFoundation.AVPlayer
+import platform.AVFoundation.AVPlayerActionAtItemEndNone
 import platform.AVFoundation.AVPlayerItem
-import platform.AVFoundation.AVPlayerLayer
+import platform.AVFoundation.AVPlayerItemDidPlayToEndTimeNotification
+import platform.AVFoundation.actionAtItemEnd
+import platform.AVFoundation.currentItem
+import platform.AVFoundation.muted
+import platform.AVFoundation.pause
 import platform.AVFoundation.play
+import platform.AVFoundation.replaceCurrentItemWithPlayerItem
+import platform.AVFoundation.seekToTime
+import platform.AVKit.AVPlayerViewController
+import platform.CoreMedia.CMTimeMake
+import platform.Foundation.NSNotificationCenter
+import platform.Foundation.NSOperationQueue
 import platform.Foundation.NSURL
+import platform.UIKit.UIColor
 import platform.UIKit.UIView
 
 @Composable
@@ -27,21 +43,61 @@ actual fun MediaPlayerView(
     onFirstFrame: () -> Unit,
 ) {
     if (url.isNotEmpty()) {
+        val player = remember(url) {
+            val nsUrl = NSURL.URLWithString(url)
+            if (nsUrl != null) {
+                AVPlayer(uRL = nsUrl).apply {
+                    muted = true
+                    actionAtItemEnd = AVPlayerActionAtItemEndNone
+                }
+            } else {
+                null
+            }
+        }
+        DisposableEffect(player) {
+            val observer = if (player != null) {
+                NSNotificationCenter.defaultCenter.addObserverForName(
+                    name = AVPlayerItemDidPlayToEndTimeNotification,
+                    `object` = player.currentItem,
+                    queue = NSOperationQueue.mainQueue,
+                ) { _ ->
+                    player.seekToTime(CMTimeMake(value = 0, timescale = 1))
+                    player.play()
+                }
+            } else {
+                null
+            }
+            onDispose {
+                if (observer != null) {
+                    NSNotificationCenter.defaultCenter.removeObserver(observer)
+                }
+                player?.pause()
+            }
+        }
+        val controller = remember(url) {
+            AVPlayerViewController().apply {
+                this.player = player
+                this.showsPlaybackControls = false
+                this.updatesNowPlayingInfoCenter = false
+                this.videoGravity = if (cropToBounds) {
+                    AVLayerVideoGravityResizeAspectFill
+                } else {
+                    AVLayerVideoGravityResizeAspect
+                }
+                this.view.backgroundColor = UIColor.clearColor
+                this.view.userInteractionEnabled = false
+            }
+        }
         UIKitView(
             modifier = modifier,
             factory = {
-                val containerView = UIView()
-                val nsUrl = NSURL.URLWithString(url)
-                if (nsUrl != null) {
-                    val player = AVPlayer(uRL = nsUrl)
-                    val layer = AVPlayerLayer.playerLayerWithPlayer(player)
-                    layer.frame = containerView.bounds
-                    containerView.layer.addSublayer(layer)
-                    player.play()
-                    onFirstFrame()
-                }
-                containerView
-            }
+                player?.play()
+                onFirstFrame()
+                controller.view
+            },
+            update = { _ ->
+                player?.play()
+            },
         )
     } else {
         Box(modifier = modifier.background(Color.Black))

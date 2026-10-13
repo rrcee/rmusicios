@@ -359,7 +359,11 @@ internal class CommonRepositoryImpl(
         filePath: String,
     ): Boolean {
         try {
-            fileSystem().sink(filePath.toPath()).buffer().use { sink ->
+            val path = filePath.toPath()
+            path.parent?.let { parentDir ->
+                runCatching { fileSystem().createDirectories(parentDir) }
+            }
+            fileSystem().sink(path).buffer().use { sink ->
                 sink.writeUtf8(text)
                 sink.close()
                 return true
