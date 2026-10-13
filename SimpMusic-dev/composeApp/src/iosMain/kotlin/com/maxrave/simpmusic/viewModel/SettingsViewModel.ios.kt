@@ -26,8 +26,9 @@ import platform.Foundation.NSUserDefaults
 import platform.Foundation.dataWithContentsOfFile
 import platform.Foundation.dataWithContentsOfURL
 import platform.Foundation.getBytes
+import platform.Foundation.NSError
 import platform.Foundation.writeToFile
-import platform.UIKit.UIApplication
+import platform.UIKit.*
 
 @OptIn(ExperimentalForeignApi::class)
 actual suspend fun calculateDataFraction(cacheRepository: CacheRepository): SettingsStorageSectionFraction? {
@@ -143,7 +144,7 @@ actual fun setAppIconNative(iconKey: String?) {
             val app = UIApplication.sharedApplication
             if (app.supportsAlternateIcons) {
                 val target = if (iconKey.isNullOrEmpty() || iconKey == "default") null else iconKey
-                app.setAlternateIconName(target) { _ -> }
+                app.setAlternateIconName(target) { _: NSError? -> }
             }
         }
     }
